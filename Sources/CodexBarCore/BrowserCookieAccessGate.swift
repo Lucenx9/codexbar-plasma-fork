@@ -15,6 +15,17 @@ public enum BrowserCookieAccessGate {
     private static let cooldownInterval: TimeInterval = 60 * 60 * 6
     private static let log = CodexBarLog.logger(LogCategories.browserCookieGate)
 
+    static func allowsCookieStoreAccess(homeDirectories: [URL]) -> Bool {
+        guard self.isRunningUnderTests,
+              ProcessInfo.processInfo.environment["CODEXBAR_ALLOW_TEST_BROWSER_COOKIE_ACCESS"] != "1"
+        else {
+            return true
+        }
+
+        let defaultHomes = Set(BrowserCookieClient.defaultHomeDirectories().map(Self.normalizedPath))
+        return homeDirectories.allSatisfy { !defaultHomes.contains(Self.normalizedPath($0)) }
+    }
+
     public static func shouldAttempt(_ browser: Browser, now: Date = Date()) -> Bool {
         guard browser.usesKeychainForCookieDecryption else { return true }
         guard !KeychainAccessGate.isDisabled else { return false }
@@ -97,6 +108,19 @@ public enum BrowserCookieAccessGate {
 
     private static let safeStorageLabels: [(service: String, account: String)] = Browser.safeStorageLabels
 
+    private static var isRunningUnderTests: Bool {
+        let processName = ProcessInfo.processInfo.processName
+        let environment = ProcessInfo.processInfo.environment
+        return processName == "swiftpm-testing-helper"
+            || processName.hasSuffix("PackageTests")
+            || environment["XCTestConfigurationFilePath"] != nil
+            || environment["SWIFT_TESTING"] != nil
+    }
+
+    private static func normalizedPath(_ url: URL) -> String {
+        url.standardizedFileURL.resolvingSymlinksInPath().path
+    }
+
     private static func loadIfNeeded(_ state: inout State) {
         guard !state.loaded else { return }
         state.loaded = true
@@ -118,6 +142,10 @@ extension BrowserCookieClient {
         in browser: Browser,
         logger: ((String) -> Void)? = nil) throws -> [BrowserCookieStoreRecords]
     {
+        guard BrowserCookieAccessGate.allowsCookieStoreAccess(homeDirectories: self.configuration.homeDirectories)
+        else {
+            return []
+        }
         guard BrowserCookieAccessGate.shouldAttempt(browser) else { return [] }
         return try self.records(matching: query, in: browser, logger: logger)
     }

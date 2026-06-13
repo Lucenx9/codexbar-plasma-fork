@@ -8,16 +8,43 @@ import SweetCookieKit
 @Suite(.serialized)
 struct BrowserDetectionTests {
     @Test
-    func `safari always installed`() {
+    func `safari is installed but default cookie access is disabled during tests`() {
+        guard ProcessInfo.processInfo.environment["CODEXBAR_ALLOW_TEST_BROWSER_COOKIE_ACCESS"] != "1" else { return }
+
         #expect(BrowserDetection(cacheTTL: 0).isAppInstalled(.safari) == true)
-        #expect(BrowserDetection(cacheTTL: 0).isCookieSourceAvailable(.safari) == true)
+        #expect(BrowserDetection(cacheTTL: 0).isCookieSourceAvailable(.safari) == false)
     }
 
     @Test
-    func `filter installed includes safari`() {
+    func `default cookie candidates exclude safari during tests`() {
+        guard ProcessInfo.processInfo.environment["CODEXBAR_ALLOW_TEST_BROWSER_COOKIE_ACCESS"] != "1" else { return }
+
         let detection = BrowserDetection(cacheTTL: 0)
         let browsers: [Browser] = [.safari, .chrome, .firefox]
-        #expect(browsers.cookieImportCandidates(using: detection).contains(.safari))
+        #expect(browsers.cookieImportCandidates(using: detection).contains(.safari) == false)
+    }
+
+    @Test
+    func `explicit isolated home keeps safari cookie source available`() {
+        let detection = BrowserDetection(homeDirectory: "/tmp/codexbar-browser-detection", cacheTTL: 0)
+        #expect(detection.isCookieSourceAvailable(.safari))
+    }
+
+    @Test
+    func `cookie client skips real browser stores during tests`() throws {
+        guard ProcessInfo.processInfo.environment["CODEXBAR_ALLOW_TEST_BROWSER_COOKIE_ACCESS"] != "1" else { return }
+
+        let records = try BrowserCookieClient().codexBarRecords(
+            matching: BrowserCookieQuery(domains: ["example.com"]),
+            in: .safari)
+        #expect(records.isEmpty)
+    }
+
+    @Test
+    func `cookie client permits isolated browser stores during tests`() {
+        let tempHome = URL(fileURLWithPath: "/tmp/codexbar-browser-cookie-client")
+        let client = BrowserCookieClient(configuration: .init(homeDirectories: [tempHome]))
+        #expect(BrowserCookieAccessGate.allowsCookieStoreAccess(homeDirectories: client.configuration.homeDirectories))
     }
 
     @Test
