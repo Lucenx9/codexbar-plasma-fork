@@ -33,13 +33,16 @@ struct KiroStatusProbeTests {
         fi
 
         if [ "$1" = "chat" ] && [ "$3" = "/usage" ]; then
-          python3 - <<'PY' &
-        import os
-        import time
-
-        open(os.environ["CODEXBAR_TEST_CHILD_PID_FILE"], "w").write(str(os.getpid()))
-        time.sleep(5)
-        PY
+          /bin/sh -c '
+            trap "" HUP TERM
+            printf "%s" "$$" > "$CODEXBAR_TEST_CHILD_PID_FILE"
+            while true; do sleep 1; done
+          ' &
+          for _ in {1..100}; do
+            [ -s "$CODEXBAR_TEST_CHILD_PID_FILE" ] && break
+            sleep 0.01
+          done
+          test -s "$CODEXBAR_TEST_CHILD_PID_FILE"
           printf 'Estimated Usage | resets on 2026-06-01 | KIRO FREE\\n'
           printf 'Credits (12.50 of 50 covered in plan)\\n'
           printf '████████████████████ 25%%\\n'
@@ -73,6 +76,14 @@ struct KiroStatusProbeTests {
         #expect(snapshot.planName == "KIRO FREE")
         #expect(snapshot.creditsUsed == 12.50)
         #expect(elapsed < 3, "Kiro usage capture should not wait for inherited pipe EOF, took \(elapsed)s")
+
+        let childPIDText = try String(contentsOf: childPIDFile, encoding: .utf8)
+        let childPID = try #require(pid_t(childPIDText.trimmingCharacters(in: .whitespacesAndNewlines)))
+        let cleanupDeadline = Date().addingTimeInterval(1)
+        while kill(childPID, 0) == 0, Date() < cleanupDeadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(kill(childPID, 0) == -1, "Kiro usage capture should terminate pipe-holding helpers")
     }
 
     @Test
