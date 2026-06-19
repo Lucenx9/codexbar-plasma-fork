@@ -29,7 +29,7 @@
 - Memory: release idle OpenAI WebViews under system pressure without blocking the main thread. Thanks @ProspectOre!
 - Memory: trim rebuildable menu and OpenAI debug caches under system pressure. Thanks @ProspectOre!
 - Provider plans: keep Claude and Kiro plan matching on one rendered line to avoid bogus labels from adjacent usage hints. Thanks @elijahfriedman!
-- Antigravity: use current Gemini 5-hour and weekly quota-summary lanes for the compact menu bar icon. Thanks @Zihao-Qi!
+- Antigravity: use current Gemini 5-hour and weekly quota-summary lanes for the compact menu bar icon and merged highest-usage selection. Thanks @Zihao-Qi!
 - Usage bars: render values rounded to 0% or 100% as fully empty or full. Thanks @Zihao-Qi!
 - Codex web: keep cookie-import deadlines responsive when browser cookie work blocks the shared worker pool.
 - Codex pace: extrapolate historically exhausted weeks for run-out forecasts and avoid contradictory reset headlines. Thanks @Yuxin-Qiao!
