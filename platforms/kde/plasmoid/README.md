@@ -16,15 +16,36 @@ Plasma widget only renders local CLI output.
 Install the CLI from the main CodexBar release tarballs, Homebrew formula, AUR
 package, or a local Swift build.
 
+On Arch-compatible systems:
+
+```sh
+yay -S codexbar-cli
+```
+
 ## Install
 
-From this directory:
+From the repository root:
+
+```sh
+kpackagetool6 -t Plasma/Applet -i platforms/kde/plasmoid
+```
+
+From this directory, the equivalent command is:
 
 ```sh
 kpackagetool6 -t Plasma/Applet -i .
 ```
 
-For development updates:
+## Upgrade
+
+For development updates from the repository root:
+
+```sh
+kpackagetool6 -t Plasma/Applet -u platforms/kde/plasmoid
+systemctl --user restart plasma-plasmashell.service
+```
+
+From this directory, the equivalent applet update command is:
 
 ```sh
 kpackagetool6 -t Plasma/Applet -u .
@@ -39,6 +60,7 @@ Before debugging the widget, verify the data source directly:
 ```sh
 codexbar usage --format json --json-only
 codexbar usage --format json --json-only --provider codex --source oauth
+codexbar usage --provider codex --all-accounts --format json --json-only
 ```
 
 If Plasma does not inherit your shell `PATH`, set an absolute command path in

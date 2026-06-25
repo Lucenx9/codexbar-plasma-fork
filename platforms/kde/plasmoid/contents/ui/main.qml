@@ -27,6 +27,7 @@ PlasmoidItem {
     property bool includeStatus: Plasmoid.configuration.includeStatus
     property bool usageBarsShowUsed: Plasmoid.configuration.usageBarsShowUsed === true
     property bool showProviderChangelogs: Plasmoid.configuration.showProviderChangelogs === true
+    property int providerConfigRevision: Plasmoid.configuration.providerConfigRevision || 0
     property var providers: []
     property var providerDisplayNames: ({})
     property string errorText: ""
@@ -36,6 +37,9 @@ PlasmoidItem {
     property string connectedCommandSource: ""
     property string providerConfigCommandSource: buildProviderConfigCommand()
     property string connectedProviderConfigCommandSource: ""
+    property string providerConfigWatchCommand: buildProviderConfigWatchCommand()
+    property string providerConfigStamp: ""
+    property int commandRunSerial: 0
     property var pendingProviderCommands: ({})
     property var fallbackProviderOrder: []
     property var fallbackProviderResults: ({})
@@ -48,6 +52,11 @@ PlasmoidItem {
     property string costErrorText: ""
     property int selectedProviderIndex: 0
     property bool selectionInitialized: false
+    property var selectedAccounts: ({})
+    property var accountOptions: ({})
+    property var accountErrors: ({})
+    property var accountLoading: ({})
+    property var pendingAccountCommands: ({})
     readonly property bool overviewAvailable: provider.length === 0 && providers.length > 1
     readonly property bool overviewSelected: overviewAvailable && selectedProviderIndex < 0
     readonly property var selectedProviderData: providers.length > 0 && selectedProviderIndex >= 0
@@ -55,6 +64,7 @@ PlasmoidItem {
         : null
 
     onCommandSourceChanged: Qt.callLater(refreshNow)
+    onProviderConfigRevisionChanged: Qt.callLater(refreshNow)
     onProvidersChanged: {
         if (providers.length === 0) {
             selectedProviderIndex = 0
@@ -74,7 +84,12 @@ PlasmoidItem {
         }
     }
 
-    Component.onCompleted: refreshNow()
+    Component.onCompleted: {
+        if (providerConfigWatchCommand.length > 0) {
+            providerConfigWatcher.connectSource(providerConfigWatchCommand)
+        }
+        refreshNow()
+    }
 
     function buildCommand() {
         if (commandPath.length === 0) {
@@ -92,11 +107,49 @@ PlasmoidItem {
         if (provider.length > 0) {
             parts.push("--provider")
             parts.push(shellQuote(provider))
+            var selectedAccount = selectedAccountForProvider(provider)
+            if (selectedAccount.length > 0) {
+                parts.push("--account")
+                parts.push(shellQuote(selectedAccount))
+            }
         }
 
         if (source.length > 0) {
             parts.push("--source")
             parts.push(shellQuote(source))
+        }
+
+        if (includeStatus) {
+            parts.push("--status")
+        }
+
+        return parts.join(" ")
+    }
+
+    function buildProviderAccountsCommand(providerID) {
+        if (commandPath.length === 0) {
+            return ""
+        }
+
+        var parts = [
+            shellQuote(commandPath),
+            "usage",
+            "--provider",
+            shellQuote(providerCliArgument(providerID)),
+            "--all-accounts",
+            "--format",
+            "json",
+            "--json-only"
+        ]
+
+        var effectiveSource = source
+        if (source.length === 0 && providerKey(providerID) === "codex") {
+            effectiveSource = "cli"
+        }
+
+        if (effectiveSource.length > 0) {
+            parts.push("--source")
+            parts.push(shellQuote(effectiveSource))
         }
 
         if (includeStatus) {
@@ -121,6 +174,14 @@ PlasmoidItem {
         ].join(" ")
     }
 
+    function buildProviderConfigWatchCommand() {
+        return [
+            "sh",
+            "-lc",
+            shellQuote("config=\"${XDG_CONFIG_HOME:-$HOME/.config}/codexbar/config.json\"; if [ -r \"$config\" ]; then cksum \"$config\"; else printf missing; fi")
+        ].join(" ")
+    }
+
     function buildProviderUsageCommand(providerID, codexCliFallback) {
         var parts = [
             shellQuote(commandPath),
@@ -140,6 +201,12 @@ PlasmoidItem {
         if (effectiveSource.length > 0) {
             parts.push("--source")
             parts.push(shellQuote(effectiveSource))
+        }
+
+        var selectedAccount = selectedAccountForProvider(providerID)
+        if (selectedAccount.length > 0) {
+            parts.push("--account")
+            parts.push(shellQuote(selectedAccount))
         }
 
         if (includeStatus) {
@@ -174,6 +241,14 @@ PlasmoidItem {
         return "'" + String(value).replace(/'/g, "'\\''") + "'"
     }
 
+    function commandWithRunNonce(command) {
+        if (command.length === 0) {
+            return ""
+        }
+        commandRunSerial += 1
+        return "CODEXBAR_PLASMA_RUN=" + commandRunSerial + " " + command
+    }
+
     function refreshNow() {
         disconnectUsageCommands()
 
@@ -190,7 +265,7 @@ PlasmoidItem {
             refreshCost()
             return
         }
-        connectedCommandSource = commandSource
+        connectedCommandSource = commandWithRunNonce(commandSource)
         usageSource.connectSource(connectedCommandSource)
         refreshCost()
     }
@@ -207,11 +282,32 @@ PlasmoidItem {
         for (var command in pendingProviderCommands) {
             usageSource.disconnectSource(command)
         }
+        for (var accountCommand in pendingAccountCommands) {
+            usageSource.disconnectSource(accountCommand)
+        }
         pendingProviderCommands = ({})
+        pendingAccountCommands = ({})
+        accountLoading = ({})
         fallbackProviderOrder = []
         fallbackProviderResults = ({})
         fallbackProviderSeen = ({})
         pendingProviderCount = 0
+    }
+
+    function handleProviderConfigWatch(stdoutText) {
+        var stamp = stdoutText.trim()
+        if (stamp.length === 0) {
+            return
+        }
+        if (providerConfigStamp.length === 0) {
+            providerConfigStamp = stamp
+            return
+        }
+        if (stamp === providerConfigStamp) {
+            return
+        }
+        providerConfigStamp = stamp
+        Qt.callLater(refreshNow)
     }
 
     function refreshCost() {
@@ -227,7 +323,7 @@ PlasmoidItem {
         }
 
         costErrorText = ""
-        connectedCostCommandSource = costCommandSource
+        connectedCostCommandSource = commandWithRunNonce(costCommandSource)
         usageSource.connectSource(connectedCostCommandSource)
     }
 
@@ -290,7 +386,7 @@ PlasmoidItem {
             return
         }
 
-        connectedProviderConfigCommandSource = providerConfigCommandSource
+        connectedProviderConfigCommandSource = commandWithRunNonce(providerConfigCommandSource)
         usageSource.connectSource(connectedProviderConfigCommandSource)
     }
 
@@ -342,14 +438,17 @@ PlasmoidItem {
         fallbackProviderSeen = ({})
         pendingProviderCount = 0
 
+        var seenCommands = ({})
         var commands = ({})
         var commandList = []
         for (var i = 0; i < providerIDs.length; i++) {
             var providerID = providerKey(providerIDs[i])
-            var command = buildProviderUsageCommand(providerID, true)
-            if (commands[command]) {
+            var baseCommand = buildProviderUsageCommand(providerID, true)
+            if (seenCommands[baseCommand]) {
                 continue
             }
+            seenCommands[baseCommand] = true
+            var command = commandWithRunNonce(baseCommand)
             commands[command] = providerID
             commandList.push(command)
             fallbackProviderOrder.push(providerID)
@@ -446,6 +545,91 @@ PlasmoidItem {
         }
     }
 
+    function loadAccounts(providerID) {
+        var normalizedProviderID = providerKey(providerID)
+        if (accountLoadingForProvider(normalizedProviderID)) {
+            return
+        }
+
+        var command = buildProviderAccountsCommand(normalizedProviderID)
+        if (command.length === 0) {
+            setAccountError(normalizedProviderID, i18n("Set the codexbar command path in widget settings."))
+            return
+        }
+
+        setAccountError(normalizedProviderID, "")
+        setAccountLoading(normalizedProviderID, true)
+        var connectedCommand = commandWithRunNonce(command)
+        var commands = copyObject(pendingAccountCommands)
+        commands[connectedCommand] = normalizedProviderID
+        pendingAccountCommands = commands
+        usageSource.connectSource(connectedCommand)
+    }
+
+    function parseProviderAccountsOutput(sourceName, stdoutText, stderrText) {
+        var providerID = pendingAccountCommands[sourceName] || ""
+        if (providerID.length === 0) {
+            return
+        }
+
+        var commands = copyObject(pendingAccountCommands)
+        delete commands[sourceName]
+        pendingAccountCommands = commands
+        setAccountLoading(providerID, false)
+
+        var trimmed = stdoutText.trim()
+        if (trimmed.length === 0) {
+            setAccountOptions(providerID, [])
+            setAccountError(providerID, stderrText.trim().length > 0 ? stderrText.trim() : i18n("codexbar did not return account data."))
+            return
+        }
+
+        var payload
+        try {
+            payload = JSON.parse(trimmed)
+        } catch (error) {
+            setAccountOptions(providerID, [])
+            setAccountError(providerID, i18n("Could not parse codexbar account JSON: %1", error.message))
+            return
+        }
+
+        var items = Array.isArray(payload) ? payload : [payload]
+        var options = []
+        var message = ""
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i]
+            if (!item) {
+                continue
+            }
+            if (!item.provider) {
+                item.provider = providerID
+            }
+            var normalized = normalizeProvider(item)
+            if (normalized.error.length > 0 && accountLabel(normalized).length === 0) {
+                message = normalized.error
+                continue
+            }
+            options.push(normalized)
+        }
+
+        setAccountOptions(providerID, dedupeAccountOptions(options))
+        setAccountError(providerID, options.length === 0 ? message : "")
+    }
+
+    function dedupeAccountOptions(items) {
+        var seen = ({})
+        var result = []
+        for (var i = 0; i < items.length; i++) {
+            var label = accountLabel(items[i])
+            if (label.length === 0 || seen[label]) {
+                continue
+            }
+            seen[label] = true
+            result.push(items[i])
+        }
+        return result
+    }
+
     function parseCostOutput(stdoutText, stderrText) {
         var trimmed = stdoutText.trim()
         if (trimmed.length === 0) {
@@ -492,8 +676,53 @@ PlasmoidItem {
             title: i18n("Cost"),
             sessionLine: costLine(i18n("Today"), item.sessionCostUSD, item.sessionTokens, currency),
             monthLine: costLine(windowLabel, item.last30DaysCostUSD, item.last30DaysTokens, currency),
-            hintLine: tokenCostHint(providerID)
+            hintLine: tokenCostHint(providerID),
+            daily: normalizeCostDaily(item.daily, currency)
         }
+    }
+
+    function normalizeCostDaily(items, currency) {
+        var result = []
+        if (!items || !Array.isArray(items)) {
+            return result
+        }
+
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i] || ({})
+            var cost = Number(item.totalCost !== undefined ? item.totalCost : item.costUSD)
+            var tokens = Number(item.totalTokens !== undefined ? item.totalTokens : item.tokens)
+            if (!isFinite(cost) && !isFinite(tokens)) {
+                continue
+            }
+            result.push({
+                label: String(item.date || item.day || item.dayKey || ""),
+                cost: isFinite(cost) ? Math.max(0, cost) : 0,
+                tokens: isFinite(tokens) ? Math.max(0, tokens) : 0,
+                currency: currency || "USD"
+            })
+        }
+
+        return result.slice(Math.max(0, result.length - 30))
+    }
+
+    function costSparklineMax(points) {
+        var maxCost = 0
+        if (!points) {
+            return maxCost
+        }
+        for (var i = 0; i < points.length; i++) {
+            maxCost = Math.max(maxCost, Number(points[i].cost) || 0)
+        }
+        return maxCost
+    }
+
+    function costSparklineSummary(points) {
+        if (!points || points.length === 0) {
+            return ""
+        }
+        var last = points[points.length - 1]
+        var label = last.label && last.label.length > 0 ? last.label : i18n("Latest")
+        return i18n("%1: %2", label, amountString(last.cost, last.currency || "USD"))
     }
 
     function applyTokenCosts() {
@@ -506,6 +735,126 @@ PlasmoidItem {
             var item = copyObject(providers[i])
             item.tokenCost = tokenCosts[item.provider] || null
             nextProviders.push(item)
+        }
+        providers = nextProviders
+    }
+
+    function selectedAccountForProvider(providerID) {
+        var key = providerKey(providerID)
+        var selected = selectedAccounts[key]
+        return selected ? String(selected) : ""
+    }
+
+    function accountOptionsForProvider(providerID) {
+        var key = providerKey(providerID)
+        return accountOptions[key] || []
+    }
+
+    function accountErrorForProvider(providerID) {
+        var key = providerKey(providerID)
+        return accountErrors[key] ? String(accountErrors[key]) : ""
+    }
+
+    function accountLoadingForProvider(providerID) {
+        return accountLoading[providerKey(providerID)] === true
+    }
+
+    function setAccountOptions(providerID, options) {
+        var next = copyObject(accountOptions)
+        next[providerKey(providerID)] = options || []
+        accountOptions = next
+    }
+
+    function setAccountError(providerID, message) {
+        var next = copyObject(accountErrors)
+        var key = providerKey(providerID)
+        if (message && String(message).trim().length > 0) {
+            next[key] = String(message).trim()
+        } else {
+            delete next[key]
+        }
+        accountErrors = next
+    }
+
+    function setAccountLoading(providerID, value) {
+        var next = copyObject(accountLoading)
+        var key = providerKey(providerID)
+        if (value) {
+            next[key] = true
+        } else {
+            delete next[key]
+        }
+        accountLoading = next
+    }
+
+    function accountLabel(item) {
+        if (!item) {
+            return ""
+        }
+        if (item.account && item.account.length > 0) {
+            return item.account
+        }
+        if (item.organization && item.organization.length > 0) {
+            return item.organization
+        }
+        if (item.loginMethod && item.loginMethod.length > 0) {
+            return item.loginMethod
+        }
+        return ""
+    }
+
+    function accountSubtitle(item) {
+        if (!item) {
+            return ""
+        }
+        var parts = []
+        if (item.loginMethod && item.loginMethod.length > 0) {
+            parts.push(item.loginMethod)
+        }
+        if (item.organization && item.organization.length > 0 && item.organization !== item.account) {
+            parts.push(item.organization)
+        }
+        return parts.join(" · ")
+    }
+
+    function accountIsSelected(option, currentItem) {
+        if (!option) {
+            return false
+        }
+        var label = accountLabel(option)
+        var selected = selectedAccountForProvider(option.provider)
+        if (selected.length > 0) {
+            return label === selected
+        }
+        return currentItem && currentItem.provider === option.provider && label === accountLabel(currentItem)
+    }
+
+    function selectAccount(providerID, accountLabel) {
+        var key = providerKey(providerID)
+        var label = String(accountLabel || "")
+        var next = copyObject(selectedAccounts)
+        if (label.length > 0) {
+            next[key] = label
+        } else {
+            delete next[key]
+        }
+        selectedAccounts = next
+
+        var options = accountOptionsForProvider(key)
+        for (var i = 0; i < options.length; i++) {
+            if (root.accountLabel(options[i]) === label) {
+                replaceProviderSnapshot(key, options[i])
+                return
+            }
+        }
+        Qt.callLater(refreshNow)
+    }
+
+    function replaceProviderSnapshot(providerID, snapshot) {
+        var key = providerKey(providerID)
+        var nextProviders = []
+        for (var i = 0; i < providers.length; i++) {
+            nextProviders.push(providers[i].provider === key ? snapshot : providers[i])
         }
         providers = nextProviders
     }
@@ -1198,6 +1547,88 @@ PlasmoidItem {
         }
     }
 
+    function providerDocsUrl(providerID) {
+        var key = providerKey(providerID)
+        var docs = {
+            abacus: "abacus.md",
+            alibaba: "alibaba-coding-plan.md",
+            alibabatokenplan: "alibaba-token-plan.md",
+            amp: "amp.md",
+            antigravity: "antigravity.md",
+            augment: "augment.md",
+            bedrock: "bedrock.md",
+            chutes: "chutes.md",
+            claude: "claude.md",
+            codebuff: "codebuff.md",
+            commandcode: "command-code.md",
+            codex: "codex.md",
+            crof: "crof.md",
+            cursor: "cursor.md",
+            deepgram: "deepgram.md",
+            deepseek: "deepseek.md",
+            devin: "devin.md",
+            doubao: "doubao.md",
+            elevenlabs: "elevenlabs.md",
+            factory: "factory.md",
+            gemini: "gemini.md",
+            grok: "grok.md",
+            groq: "groqcloud.md",
+            jetbrains: "jetbrains.md",
+            kilo: "kilo.md",
+            kimi: "kimi.md",
+            kimik2: "kimi-k2.md",
+            kiro: "kiro.md",
+            litellm: "litellm.md",
+            llmproxy: "llm-proxy.md",
+            manus: "manus.md",
+            mimo: "mimo.md",
+            minimax: "minimax.md",
+            moonshot: "moonshot.md",
+            ollama: "ollama.md",
+            opencode: "opencode.md",
+            opencodego: "opencode.md",
+            vertexai: "vertexai.md",
+            warp: "warp.md",
+            windsurf: "windsurf.md",
+            zai: "zai.md"
+        }
+        if (!docs[key]) {
+            return ""
+        }
+        return "https://github.com/steipete/CodexBar/blob/main/docs/" + docs[key]
+    }
+
+    function providerLoginUrl(providerID) {
+        switch (providerKey(providerID)) {
+        case "codex":
+        case "openai":
+            return "https://chatgpt.com"
+        case "claude":
+            return "https://claude.ai"
+        case "cursor":
+            return "https://cursor.com/settings"
+        case "opencode":
+        case "opencodego":
+            return "https://opencode.ai/auth"
+        case "gemini":
+            return "https://aistudio.google.com"
+        case "factory":
+            return "https://app.factory.ai"
+        case "copilot":
+            return "https://github.com/login"
+        case "devin":
+            return "https://app.devin.ai/settings/usage"
+        case "manus":
+            return "https://manus.im"
+        case "mimo":
+            return "https://platform.xiaomimimo.com/api/v1/genLoginUrl?currentPath=%2F%23%2Fconsole%2Fbalance"
+        case "perplexity":
+            return "https://www.perplexity.ai"
+        default:
+            return ""
+        }
+    }
+
     function providerStatusUrl(providerID) {
         switch (providerKey(providerID)) {
         case "alibaba":
@@ -1264,6 +1695,13 @@ PlasmoidItem {
         }
 
         var rows = []
+        rows.push({
+            title: accountLoadingForProvider(item.provider) ? i18n("Loading accounts...") : i18n("Accounts..."),
+            icon: "user-identity",
+            action: "accounts",
+            enabled: !accountLoadingForProvider(item.provider)
+        })
+
         var accountAction = providerAccountAction(item)
         if (accountAction) {
             rows.push(accountAction)
@@ -1278,6 +1716,10 @@ PlasmoidItem {
         if (showProviderChangelogs && item.changelogUrl && item.changelogUrl.length > 0) {
             rows.push({ title: i18n("Changelog"), icon: "view-list-details", action: "changelog", enabled: true })
         }
+        var docsUrl = providerDocsUrl(item.provider)
+        if (docsUrl.length > 0) {
+            rows.push({ title: i18n("Docs"), icon: "help-contents", action: "docs", url: docsUrl, enabled: true })
+        }
 
         rows.push({ title: i18n("Refresh"), icon: "view-refresh", action: "refresh", enabled: true })
         rows.push({ title: i18n("Settings..."), icon: "configure", action: "settings", enabled: true })
@@ -1287,6 +1729,7 @@ PlasmoidItem {
 
     function providerAccountAction(item) {
         var title = item.account && item.account.length > 0 ? i18n("Switch Account...") : i18n("Add Account...")
+        var loginUrl = providerLoginUrl(item.provider)
         switch (providerKey(item.provider)) {
         case "devin":
             return { title: i18n("Open Devin..."), icon: "internet-services", action: "account-url", url: "https://app.devin.ai/settings/usage", enabled: true }
@@ -1299,7 +1742,9 @@ PlasmoidItem {
         case "perplexity":
             return { title: title, icon: "internet-services", action: "account-url", url: "https://www.perplexity.ai/", enabled: true }
         default:
-            return null
+            return loginUrl.length > 0
+                ? { title: title, icon: "internet-services", action: "account-url", url: loginUrl, enabled: true }
+                : null
         }
     }
 
@@ -1312,6 +1757,10 @@ PlasmoidItem {
             Qt.openUrlExternally(item.statusUrl)
         } else if (actionID === "changelog" && item) {
             Qt.openUrlExternally(item.changelogUrl)
+        } else if (actionID === "docs" && actionRow && actionRow.url) {
+            Qt.openUrlExternally(actionRow.url)
+        } else if (actionID === "accounts" && item) {
+            root.loadAccounts(item.provider)
         } else if (actionID === "account-url" && actionRow && actionRow.url) {
             Qt.openUrlExternally(actionRow.url)
         } else if (actionID === "refresh") {
@@ -1328,6 +1777,15 @@ PlasmoidItem {
 
     function withAlpha(color, alpha) {
         return Qt.rgba(color.r, color.g, color.b, alpha)
+    }
+
+    function canvasColor(color, alpha) {
+        var opacity = alpha === undefined ? color.a : alpha
+        return "rgba("
+            + Math.round(color.r * 255) + ", "
+            + Math.round(color.g * 255) + ", "
+            + Math.round(color.b * 255) + ", "
+            + opacity + ")"
     }
 
     function contrastTextColor(color) {
@@ -1695,6 +2153,11 @@ PlasmoidItem {
                 return
             }
 
+            if (root.pendingAccountCommands[sourceName]) {
+                root.parseProviderAccountsOutput(sourceName, stdoutText, stderrText)
+                return
+            }
+
             if (root.pendingProviderCommands[sourceName]) {
                 root.parseProviderFallbackOutput(sourceName, stdoutText, stderrText)
                 return
@@ -1703,6 +2166,21 @@ PlasmoidItem {
             if (sourceName === root.connectedCommandSource) {
                 root.parseOutput(stdoutText, stderrText)
             }
+        }
+    }
+
+    Plasma5Support.DataSource {
+        id: providerConfigWatcher
+
+        engine: "executable"
+        interval: 2000
+
+        onNewData: function(sourceName, data) {
+            if (sourceName !== root.providerConfigWatchCommand) {
+                return
+            }
+            var stdoutText = data && data["stdout"] ? data["stdout"] : ""
+            root.handleProviderConfigWatch(stdoutText)
         }
     }
 
@@ -2257,6 +2735,79 @@ PlasmoidItem {
                     }
                 }
 
+                ColumnLayout {
+                    visible: root.selectedProviderData
+                        && (root.accountLoadingForProvider(root.selectedProviderData.provider)
+                            || root.accountOptionsForProvider(root.selectedProviderData.provider).length > 0
+                            || root.accountErrorForProvider(root.selectedProviderData.provider).length > 0)
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Kirigami.Units.smallSpacing
+
+                        PlasmaComponents.Label {
+                            text: i18n("Accounts")
+                            font.weight: Font.DemiBold
+                            Layout.fillWidth: true
+                        }
+
+                        Controls.BusyIndicator {
+                            running: root.selectedProviderData
+                                && root.accountLoadingForProvider(root.selectedProviderData.provider)
+                            visible: running
+                            Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                            Layout.preferredHeight: Kirigami.Units.iconSizes.small
+                        }
+
+                        PlasmaComponents.ToolButton {
+                            icon.name: "view-refresh"
+                            enabled: root.selectedProviderData
+                                && !root.accountLoadingForProvider(root.selectedProviderData.provider)
+                            Accessible.name: i18n("Reload accounts")
+                            onClicked: {
+                                if (root.selectedProviderData) {
+                                    root.loadAccounts(root.selectedProviderData.provider)
+                                }
+                            }
+                        }
+                    }
+
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: Kirigami.Units.smallSpacing
+
+                        Repeater {
+                            model: root.selectedProviderData
+                                ? root.accountOptionsForProvider(root.selectedProviderData.provider)
+                                : []
+
+                            delegate: Controls.Button {
+                                readonly property string label: root.accountLabel(modelData)
+                                readonly property string subtitle: root.accountSubtitle(modelData)
+
+                                checkable: true
+                                checked: root.accountIsSelected(modelData, root.selectedProviderData)
+                                text: subtitle.length > 0 ? label + " · " + subtitle : label
+                                icon.name: "user-identity"
+                                onClicked: root.selectAccount(modelData.provider, label)
+                            }
+                        }
+                    }
+
+                    PlasmaComponents.Label {
+                        visible: root.selectedProviderData
+                            && root.accountErrorForProvider(root.selectedProviderData.provider).length > 0
+                        text: root.selectedProviderData
+                            ? root.accountErrorForProvider(root.selectedProviderData.provider)
+                            : ""
+                        color: Kirigami.Theme.negativeTextColor
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                    }
+                }
+
                 PlasmaComponents.Label {
                     visible: root.selectedProviderData
                         && root.selectedProviderData.status
@@ -2545,6 +3096,70 @@ PlasmoidItem {
                                 text: tokenCostSection.tokenCost ? tokenCostSection.tokenCost.monthLine : ""
                                 Layout.fillWidth: true
                                 elide: Text.ElideRight
+                            }
+
+                            Canvas {
+                                id: costSparkline
+
+                                property var points: tokenCostSection.tokenCost ? tokenCostSection.tokenCost.daily : []
+                                readonly property real maxValue: root.costSparklineMax(points)
+                                readonly property color accent: root.providerColor(root.selectedProviderData ? root.selectedProviderData.provider : "")
+
+                                visible: points.length > 1 && maxValue > 0
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Kirigami.Units.gridUnit * 4
+
+                                onPointsChanged: requestPaint()
+                                onMaxValueChanged: requestPaint()
+                                onWidthChanged: requestPaint()
+                                onHeightChanged: requestPaint()
+
+                                onPaint: {
+                                    var ctx = getContext("2d")
+                                    ctx.clearRect(0, 0, width, height)
+                                    if (!points || points.length < 2 || maxValue <= 0 || width <= 0 || height <= 0) {
+                                        return
+                                    }
+
+                                    var gap = Math.max(1, Math.floor(width / 180))
+                                    var barWidth = Math.max(2, (width - gap * (points.length - 1)) / points.length)
+                                    var baseline = height - 1
+
+                                    ctx.fillStyle = root.canvasColor(Kirigami.Theme.textColor, 0.22)
+                                    ctx.fillRect(0, baseline, width, 1)
+
+                                    ctx.fillStyle = root.canvasColor(costSparkline.accent, 0.9)
+                                    for (var i = 0; i < points.length; i++) {
+                                        var value = Math.max(0, Number(points[i].cost) || 0)
+                                        var barHeight = Math.max(1, (height - 3) * value / maxValue)
+                                        var x = i * (barWidth + gap)
+                                        ctx.fillRect(x, baseline - barHeight, barWidth, barHeight)
+                                    }
+                                }
+                            }
+
+                            RowLayout {
+                                visible: tokenCostSection.tokenCost
+                                    && tokenCostSection.tokenCost.daily
+                                    && tokenCostSection.tokenCost.daily.length > 1
+                                Layout.fillWidth: true
+                                spacing: Kirigami.Units.smallSpacing
+
+                                PlasmaComponents.Label {
+                                    text: tokenCostSection.tokenCost ? root.costSparklineSummary(tokenCostSection.tokenCost.daily) : ""
+                                    opacity: 0.62
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideRight
+                                }
+
+                                PlasmaComponents.Label {
+                                    text: tokenCostSection.tokenCost
+                                        ? i18np("%1 day", "%1 days", tokenCostSection.tokenCost.daily.length)
+                                        : ""
+                                    opacity: 0.62
+                                    horizontalAlignment: Text.AlignRight
+                                    elide: Text.ElideRight
+                                }
                             }
 
                             PlasmaComponents.Label {

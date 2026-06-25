@@ -29,6 +29,8 @@ KCM.SimpleKCM {
     property bool cfg_showMultiProviderInPanelDefault
     property alias cfg_showCreditsInPanel: showCreditsCheck.checked
     property bool cfg_showCreditsInPanelDefault
+    property int cfg_providerConfigRevision
+    property int cfg_providerConfigRevisionDefault
 
     Kirigami.FormLayout {
         Controls.TextField {
@@ -43,6 +45,15 @@ KCM.SimpleKCM {
             Kirigami.FormData.label: i18n("Provider:")
             Layout.preferredWidth: Kirigami.Units.gridUnit * 18
             placeholderText: i18n("Provider id (blank = all enabled)")
+        }
+
+        Controls.Label {
+            Layout.preferredWidth: Kirigami.Units.gridUnit * 18
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 18
+            text: i18n("Advanced override: pin the panel to a single provider id. Leave blank to show every provider enabled on the Providers page.")
+            font: Kirigami.Theme.smallFont
+            opacity: 0.7
+            wrapMode: Text.WordWrap
         }
 
         Controls.TextField {
