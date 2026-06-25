@@ -26,6 +26,8 @@ PlasmoidItem {
     property int refreshIntervalSec: Math.max(10, Plasmoid.configuration.refreshInterval || 300)
     property bool includeStatus: Plasmoid.configuration.includeStatus
     property bool usageBarsShowUsed: Plasmoid.configuration.usageBarsShowUsed === true
+    property string menuBarDisplayMode: Plasmoid.configuration.menuBarDisplayMode || "percent"
+    property bool resetTimesShowAbsolute: Plasmoid.configuration.resetTimesShowAbsolute === true
     property bool showProviderChangelogs: Plasmoid.configuration.showProviderChangelogs === true
     property int providerConfigRevision: Plasmoid.configuration.providerConfigRevision || 0
     property var providers: []
@@ -65,6 +67,7 @@ PlasmoidItem {
 
     onCommandSourceChanged: Qt.callLater(refreshNow)
     onProviderConfigRevisionChanged: Qt.callLater(refreshNow)
+    onResetTimesShowAbsoluteChanged: Qt.callLater(refreshNow)
     onProvidersChanged: {
         if (providers.length === 0) {
             selectedProviderIndex = 0
@@ -865,7 +868,7 @@ PlasmoidItem {
         var rows = []
         var providerID = providerKey(item.provider || "unknown")
 
-        addWindow(rows, rateWindowLabel(providerID, "primary"), usage.primary, pace.primary, true, "primary")
+        var primaryRow = addWindow(rows, rateWindowLabel(providerID, "primary"), usage.primary, pace.primary, true, "primary")
         addWindow(rows, rateWindowLabel(providerID, "secondary"), usage.secondary, pace.secondary, true, "secondary")
         addWindow(rows, rateWindowLabel(providerID, "tertiary"), usage.tertiary, null, true, "tertiary")
 
@@ -893,6 +896,7 @@ PlasmoidItem {
             organization: identity.accountOrganization || usage.accountOrganization || "",
             loginMethod: identity.loginMethod || usage.loginMethod || "",
             rows: rows,
+            primaryRow: primaryRow,
             providerCost: providerCostSection(providerID, usage.providerCost),
             resetCredits: resetCreditsSection(providerID, usage.codexResetCredits),
             tokenCost: tokenCosts[providerID] || null,
@@ -947,7 +951,7 @@ PlasmoidItem {
 
     function addWindow(rows, label, window, pace, usageKnown, lane) {
         if (!window) {
-            return
+            return null
         }
 
         var known = usageKnown !== false
@@ -956,7 +960,7 @@ PlasmoidItem {
         var paceValue = pace && isFinite(Number(pace.expectedUsedPercent))
             ? clamp(Number(pace.expectedUsedPercent), 0, 100)
             : -1
-        rows.push({
+        var row = {
             lane: lane || "",
             label: label,
             hasPercent: hasPercent,
@@ -964,9 +968,11 @@ PlasmoidItem {
             leftPercent: hasPercent ? clamp(100 - used, 0, 100) : 0,
             pacePercent: paceValue,
             paceOnTop: !pace || pace.willLastToReset !== false,
-            reset: resetText(window),
+            reset: resetText(window, resetTimesShowAbsolute),
             pace: pace && pace.summary ? pace.summary : ""
-        })
+        }
+        rows.push(row)
+        return row
     }
 
     function rateWindowLabel(providerID, lane) {
@@ -1178,13 +1184,9 @@ PlasmoidItem {
         }
     }
 
-    function resetText(window) {
-        if (window.resetDescription && window.resetDescription.length > 0) {
-            return window.resetDescription
-        }
-
+    function resetText(window, absolute) {
         if (!window.resetsAt) {
-            return ""
+            return window.resetDescription && window.resetDescription.length > 0 ? window.resetDescription : ""
         }
 
         var date = new Date(window.resetsAt)
@@ -1192,7 +1194,30 @@ PlasmoidItem {
             return String(window.resetsAt)
         }
 
-        return Qt.formatDateTime(date, "ddd HH:mm")
+        if (absolute === true) {
+            return Qt.formatDateTime(date, "ddd HH:mm")
+        }
+
+        if (window.resetDescription && window.resetDescription.length > 0) {
+            return window.resetDescription
+        }
+
+        var remainingMs = date.getTime() - Date.now()
+        if (remainingMs <= 0) {
+            return i18n("now")
+        }
+        var minutes = Math.max(1, Math.round(remainingMs / 60000))
+        if (minutes < 60) {
+            return i18np("%1 min", "%1 min", minutes)
+        }
+        var hours = Math.floor(minutes / 60)
+        var restMinutes = minutes % 60
+        if (hours < 24) {
+            return restMinutes > 0 ? i18n("%1h %2m", hours, restMinutes) : i18np("%1h", "%1h", hours)
+        }
+        var days = Math.floor(hours / 24)
+        var restHours = hours % 24
+        return restHours > 0 ? i18n("%1d %2h", days, restHours) : i18np("%1d", "%1d", days)
     }
 
     function statusText(status) {
@@ -2114,9 +2139,9 @@ PlasmoidItem {
             parts.push(item.title)
         }
 
-        var percent = switcherPercent(item)
-        if (Plasmoid.configuration.showPercentInPanel && percent >= 0) {
-            parts.push(i18n("%1%", Math.round(percent)))
+        var display = menuBarDisplayText(item)
+        if (Plasmoid.configuration.showPercentInPanel && display.length > 0) {
+            parts.push(display)
         }
 
         if (Plasmoid.configuration.showCreditsInPanel && item.credits !== null) {
@@ -2124,6 +2149,56 @@ PlasmoidItem {
         }
 
         return parts.join(" ")
+    }
+
+    function menuBarDisplayText(item) {
+        if (!item) {
+            return ""
+        }
+
+        var mode = String(menuBarDisplayMode || "percent")
+        if (mode === "pace") {
+            return primaryPaceText(item)
+        }
+        if (mode === "both") {
+            var percentText = primaryPercentText(item)
+            var paceText = primaryPaceText(item)
+            if (percentText.length > 0 && paceText.length > 0) {
+                return i18n("%1 · %2", percentText, paceText)
+            }
+            return percentText.length > 0 ? percentText : paceText
+        }
+        if (mode === "resetTime") {
+            return primaryResetText(item)
+        }
+        return primaryPercentText(item)
+    }
+
+    function primaryPercentText(item) {
+        var percent = switcherPercent(item)
+        return percent >= 0 ? i18n("%1%", Math.round(percent)) : ""
+    }
+
+    function primaryPaceText(item) {
+        var row = switcherMetricRow(item)
+        if (!row || row.pacePercent < 0) {
+            return ""
+        }
+        var shownPace = paceMarkerPercent(row)
+        if (shownPace < 0) {
+            return ""
+        }
+        return row.paceOnTop
+            ? i18n("%1% pace", Math.round(shownPace))
+            : i18n("%1% pace late", Math.round(shownPace))
+    }
+
+    function primaryResetText(item) {
+        var row = switcherMetricRow(item)
+        if (!row || !row.reset || row.reset.length === 0) {
+            return ""
+        }
+        return resetLabel(row.reset)
     }
 
     function formatNumber(value) {

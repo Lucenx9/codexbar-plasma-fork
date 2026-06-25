@@ -66,6 +66,17 @@ codexbar usage --provider codex --all-accounts --format json --json-only
 If Plasma does not inherit your shell `PATH`, set an absolute command path in
 the widget settings.
 
+## Display Options
+
+The General settings page exposes the panel Display mode:
+
+- Percent: show the selected provider meter as a percentage.
+- Pace: show the current pace marker when the provider reports one.
+- Percent and pace: show both compactly.
+- Reset time: show the selected provider reset label instead of the percentage.
+
+Reset labels can be shown as countdowns or absolute local clock times.
+
 ## Structure
 
 ```text
