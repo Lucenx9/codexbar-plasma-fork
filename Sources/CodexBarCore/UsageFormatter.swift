@@ -50,9 +50,11 @@ public enum UsageFormatter {
         if let provider {
             return provider(key)
         }
+        #if !os(Linux)
         let coreBundle = Bundle(for: BundleToken.self)
         let coreValue = NSLocalizedString(key, tableName: "Localizable", bundle: coreBundle, value: key, comment: "")
         if coreValue != key { return coreValue }
+        #endif
 
         let mainValue = NSLocalizedString(key, tableName: "Localizable", bundle: .main, value: key, comment: "")
         if mainValue != key { return mainValue }
