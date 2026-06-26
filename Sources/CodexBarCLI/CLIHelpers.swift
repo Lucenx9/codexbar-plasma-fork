@@ -389,6 +389,10 @@ extension CodexBarCLI {
         CommandSignature.describe(ConfigSetAPIKeyOptions())
     }
 
+    static func _configProvidersSignatureForTesting() -> CommandSignature {
+        CommandSignature.describe(ConfigProvidersOptions())
+    }
+
     static func _configProviderToggleSignatureForTesting() -> CommandSignature {
         CommandSignature.describe(ConfigProviderToggleOptions())
     }

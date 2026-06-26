@@ -118,7 +118,7 @@ extension CodexBarCLI {
                              [--json-output] [--log-level <trace|verbose|debug|info|warning|error|critical>]
                              [-v|--verbose]
                              [--pretty]
-          codexbar config providers [--format text|json] [--json] [--json-only] [--pretty]
+          codexbar config providers [--descriptors] [--format text|json] [--json] [--json-only] [--pretty]
           codexbar config enable --provider <name> [--format text|json] [--json] [--json-only] [--pretty]
           codexbar config disable --provider <name> [--format text|json] [--json] [--json-only] [--pretty]
           codexbar config set-api-key --provider <name> (--api-key <key>|--stdin)
@@ -129,7 +129,7 @@ extension CodexBarCLI {
 
         Description:
           Validate or print the CodexBar config file (default: validate).
-          providers lists persistent provider enablement.
+          providers lists persistent provider enablement; add --descriptors for JSON-described provider settings.
           enable/disable updates the same provider toggle used by Settings.
           set-api-key stores a provider API key in the resolved config file and enables that provider by default.
           For z.ai team usage, add --usage-scope team with BigModel organization and project IDs; this stores
@@ -138,7 +138,7 @@ extension CodexBarCLI {
         Examples:
           codexbar config validate --format json --pretty
           codexbar config dump --pretty
-          codexbar config providers
+          codexbar config providers --descriptors --json-only
           codexbar config enable --provider grok
           codexbar config disable --provider cursor
           printf '%s' "$ELEVENLABS_API_KEY" | codexbar config set-api-key --provider elevenlabs --stdin

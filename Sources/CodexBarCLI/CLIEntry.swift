@@ -83,6 +83,7 @@ enum CodexBarCLI {
         let costSignature = CommandSignature.describe(CostOptions())
         let serveSignature = CommandSignature.describe(ServeOptions())
         let configSignature = CommandSignature.describe(ConfigOptions())
+        let configProvidersSignature = CommandSignature.describe(ConfigProvidersOptions())
         let configProviderToggleSignature = CommandSignature.describe(ConfigProviderToggleOptions())
         let configSetAPIKeySignature = CommandSignature.describe(ConfigSetAPIKeyOptions())
         let cacheSignature = CommandSignature.describe(CacheOptions())
@@ -124,7 +125,7 @@ enum CodexBarCLI {
                         name: "providers",
                         abstract: "List provider enablement",
                         discussion: nil,
-                        signature: configSignature),
+                        signature: configProvidersSignature),
                     CommandDescriptor(
                         name: "enable",
                         abstract: "Enable a provider",

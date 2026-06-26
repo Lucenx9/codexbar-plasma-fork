@@ -133,6 +133,43 @@ struct CLIConfigCommandTests {
     }
 
     @Test
+    func `config providers parses descriptors flag`() throws {
+        let parser = CommandParser(signature: CodexBarCLI._configProvidersSignatureForTesting())
+        let parsed = try parser.parse(arguments: [
+            "--descriptors",
+            "--json-only",
+        ])
+
+        #expect(parsed.flags.contains("descriptors"))
+        #expect(CodexBarCLI._decodeFormatForTesting(from: parsed) == .json)
+    }
+
+    @Test
+    func `config provider descriptors include redacted api key write command`() throws {
+        let config = CodexBarConfig(providers: [
+            ProviderConfig(id: .elevenlabs, enabled: true, apiKey: "xi-secret-token"),
+        ])
+        let statuses = CodexBarCLI.configProviderStatuses(config, includeDescriptors: true)
+        let elevenLabs = try #require(statuses.first { $0.provider == "elevenlabs" })
+        let descriptor = try #require(elevenLabs.descriptor)
+        let field = try #require(descriptor.fields.first { $0.id == "apiKey" })
+
+        #expect(descriptor.schemaVersion == 1)
+        #expect(field.kind == "secret")
+        #expect(field.title == "API key")
+        #expect(field.redactedValue == "configured")
+        #expect(field.writeCommand == [
+            "codexbar",
+            "config",
+            "set-api-key",
+            "--provider",
+            "elevenlabs",
+            "--stdin",
+            "--json-only",
+        ])
+    }
+
+    @Test
     func `config set api key only accepts consumed config keys`() {
         #expect(ProviderConfigEnvironment.supportsAPIKeyOverride(for: .elevenlabs))
         #expect(ProviderConfigEnvironment.supportsAPIKeyOverride(for: .groq))

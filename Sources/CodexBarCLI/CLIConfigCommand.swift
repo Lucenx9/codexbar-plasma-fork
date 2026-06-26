@@ -39,7 +39,7 @@ extension CodexBarCLI {
     static func runConfigProviders(_ values: ParsedValues) {
         let output = CLIOutputPreferences.from(values: values)
         let config = Self.loadConfig(output: output)
-        let results = Self.configProviderStatuses(config)
+        let results = Self.configProviderStatuses(config, includeDescriptors: values.flags.contains("descriptors"))
 
         switch output.format {
         case .text:
@@ -280,7 +280,10 @@ extension CodexBarCLI {
         return updated
     }
 
-    static func configProviderStatuses(_ config: CodexBarConfig) -> [ConfigProviderStatusResult] {
+    static func configProviderStatuses(
+        _ config: CodexBarConfig,
+        includeDescriptors: Bool = false) -> [ConfigProviderStatusResult]
+    {
         let metadata = ProviderDescriptorRegistry.metadata
         return config.normalized().providers.map { providerConfig in
             let meta = metadata[providerConfig.id]
@@ -289,8 +292,35 @@ extension CodexBarCLI {
                 provider: providerConfig.id.rawValue,
                 displayName: meta?.displayName ?? providerConfig.id.rawValue,
                 enabled: providerConfig.enabled ?? defaultEnabled,
-                defaultEnabled: defaultEnabled)
+                defaultEnabled: defaultEnabled,
+                descriptor: includeDescriptors ? Self.configProviderDescriptor(for: providerConfig) : nil)
         }
+    }
+
+    static func configProviderDescriptor(for providerConfig: ProviderConfig) -> ConfigProviderSettingsDescriptor {
+        var fields: [ConfigProviderSettingsField] = []
+        if ProviderConfigEnvironment.supportsAPIKeyOverride(for: providerConfig.id) {
+            let cliName = ProviderDescriptorRegistry.descriptor(for: providerConfig.id).cli.name
+            fields.append(ConfigProviderSettingsField(
+                id: "apiKey",
+                kind: "secret",
+                title: "API key",
+                description: "Stores a provider API key. Pass the secret on stdin.",
+                redactedValue: providerConfig.sanitizedAPIKey == nil ? nil : "configured",
+                writeCommand: [
+                    "codexbar",
+                    "config",
+                    "set-api-key",
+                    "--provider",
+                    cliName,
+                    "--stdin",
+                    "--json-only",
+                ]))
+        }
+        return ConfigProviderSettingsDescriptor(
+            schemaVersion: 1,
+            fields: fields,
+            actions: [])
     }
 
     private static func cleanConfigSecret(_ raw: String?) -> String? {
@@ -348,6 +378,32 @@ struct ConfigOptions: CommanderParsable {
 
     @Flag(name: .long("pretty"), help: "Pretty-print JSON output")
     var pretty: Bool = false
+}
+
+struct ConfigProvidersOptions: CommanderParsable {
+    @Flag(names: [.short("v"), .long("verbose")], help: "Enable verbose logging")
+    var verbose: Bool = false
+
+    @Flag(name: .long("json-output"), help: "Emit machine-readable logs")
+    var jsonOutput: Bool = false
+
+    @Option(name: .long("log-level"), help: "Set log level (trace|verbose|debug|info|warning|error|critical)")
+    var logLevel: String?
+
+    @Option(name: .long("format"), help: "Output format: text | json")
+    var format: OutputFormat?
+
+    @Flag(name: .long("json"), help: "")
+    var jsonShortcut: Bool = false
+
+    @Flag(name: .long("json-only"), help: "Emit JSON only (suppress non-JSON output)")
+    var jsonOnly: Bool = false
+
+    @Flag(name: .long("pretty"), help: "Pretty-print JSON output")
+    var pretty: Bool = false
+
+    @Flag(name: .long("descriptors"), help: "Include provider settings descriptors in JSON output")
+    var descriptors: Bool = false
 }
 
 struct ConfigSetAPIKeyOptions: CommanderParsable {
@@ -434,6 +490,30 @@ struct ConfigProviderStatusResult: Encodable, Equatable {
     let displayName: String
     let enabled: Bool
     let defaultEnabled: Bool
+    let descriptor: ConfigProviderSettingsDescriptor?
+}
+
+struct ConfigProviderSettingsDescriptor: Encodable, Equatable {
+    let schemaVersion: Int
+    let fields: [ConfigProviderSettingsField]
+    let actions: [ConfigProviderSettingsAction]
+}
+
+struct ConfigProviderSettingsField: Encodable, Equatable {
+    let id: String
+    let kind: String
+    let title: String
+    let description: String?
+    let redactedValue: String?
+    let writeCommand: [String]?
+}
+
+struct ConfigProviderSettingsAction: Encodable, Equatable {
+    let id: String
+    let kind: String
+    let title: String
+    let description: String?
+    let command: [String]
 }
 
 private struct ConfigProviderToggleResult: Encodable {
