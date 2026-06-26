@@ -169,6 +169,106 @@ extension CodexBarCLI {
         Self.exit(code: .success, output: output, kind: .config)
     }
 
+    static func runConfigSetProviderField(_ values: ParsedValues) {
+        let output = CLIOutputPreferences.from(values: values)
+        guard let rawProvider = values.options["provider"]?.last,
+              let provider = ProviderDescriptorRegistry.cliNameMap[rawProvider.lowercased()]
+        else {
+            Self.exit(
+                code: .failure,
+                message: "Unknown or missing provider. Use --provider <name>.",
+                output: output,
+                kind: .args)
+        }
+        guard let rawField = values.options["field"]?.last,
+              let field = ConfigProviderField(rawValue: rawField)
+        else {
+            Self.exit(
+                code: .failure,
+                message: "Unknown or missing field. Use --field <field>.",
+                output: output,
+                kind: .args)
+        }
+
+        let fieldValue: String?
+        do {
+            fieldValue = try Self.resolveConfigFieldInput(
+                value: values.options["value"]?.last,
+                readFromStdin: values.flags.contains("stdin"),
+                clear: values.flags.contains("clear"))
+        } catch {
+            Self.exit(code: .failure, message: error.localizedDescription, output: output, kind: .args)
+        }
+
+        let store = CodexBarConfigStore()
+        var config = Self.loadConfig(output: output)
+        do {
+            config = try Self.configSettingProviderField(
+                config,
+                provider: provider,
+                field: field,
+                value: fieldValue)
+            try store.save(config)
+        } catch {
+            Self.exit(code: .failure, message: error.localizedDescription, output: output, kind: .config)
+        }
+
+        let result = ConfigSetProviderFieldResult(
+            provider: provider.rawValue,
+            field: field.rawValue,
+            configured: fieldValue != nil,
+            enabled: config.providerConfig(for: provider)?.enabled ?? false,
+            configPath: store.fileURL.path)
+
+        switch output.format {
+        case .text:
+            let verb = fieldValue == nil ? "cleared" : "saved"
+            print("Config: \(verb) \(field.rawValue) for \(provider.rawValue)")
+        case .json:
+            Self.printJSON(result, pretty: output.pretty)
+        }
+
+        Self.exit(code: .success, output: output, kind: .config)
+    }
+
+    static func runConfigAction(_ values: ParsedValues) {
+        let output = CLIOutputPreferences.from(values: values)
+        guard let rawProvider = values.options["provider"]?.last,
+              let provider = ProviderDescriptorRegistry.cliNameMap[rawProvider.lowercased()]
+        else {
+            Self.exit(
+                code: .failure,
+                message: "Unknown or missing provider. Use --provider <name>.",
+                output: output,
+                kind: .args)
+        }
+        guard let rawAction = values.options["action"]?.last,
+              let action = ConfigProviderAction(rawValue: rawAction)
+        else {
+            Self.exit(
+                code: .failure,
+                message: "Unknown or missing action. Use --action <action>.",
+                output: output,
+                kind: .args)
+        }
+
+        let result: ConfigProviderActionResult
+        do {
+            result = try Self.configProviderActionResult(provider: provider, action: action)
+        } catch {
+            Self.exit(code: .failure, message: error.localizedDescription, output: output, kind: .config)
+        }
+
+        switch output.format {
+        case .text:
+            print(result.url ?? result.message)
+        case .json:
+            Self.printJSON(result, pretty: output.pretty)
+        }
+
+        Self.exit(code: .success, output: output, kind: .config)
+    }
+
     static func resolveConfigAPIKeyInput(apiKey: String?, readFromStdin: Bool) throws -> String {
         if apiKey != nil, readFromStdin {
             throw CLIArgumentError("Use either --api-key or --stdin, not both.")
@@ -280,6 +380,79 @@ extension CodexBarCLI {
         return updated
     }
 
+    static func resolveConfigFieldInput(value: String?, readFromStdin: Bool, clear: Bool) throws -> String? {
+        if clear {
+            if value != nil || readFromStdin {
+                throw CLIArgumentError("Use --clear without --value or --stdin.")
+            }
+            return nil
+        }
+        if value != nil, readFromStdin {
+            throw CLIArgumentError("Use either --value or --stdin, not both.")
+        }
+
+        let raw: String? = if readFromStdin {
+            String(data: FileHandle.standardInput.readDataToEndOfFile(), encoding: .utf8)
+        } else {
+            value
+        }
+        guard let cleaned = Self.cleanConfigSecret(raw) else {
+            throw CLIArgumentError("Missing value. Pass --value <value>, pipe with --stdin, or use --clear.")
+        }
+        return cleaned
+    }
+
+    static func configSettingProviderField(
+        _ config: CodexBarConfig,
+        provider: UsageProvider,
+        field: ConfigProviderField,
+        value: String?) throws -> CodexBarConfig
+    {
+        var updated = config.normalized()
+        var providerConfig = updated.providerConfig(for: provider) ?? ProviderConfig(id: provider)
+
+        switch field {
+        case .apiKey:
+            providerConfig.apiKey = value
+        case .cookieHeader:
+            providerConfig.cookieHeader = value
+        case .sourceMode:
+            providerConfig.source = try value.map { raw in
+                guard let mode = ProviderSourceMode(rawValue: raw) else {
+                    throw CLIArgumentError("Invalid sourceMode: \(raw).")
+                }
+                return mode
+            }
+        case .cookieSource:
+            providerConfig.cookieSource = try value.map { raw in
+                guard let source = ProviderCookieSource(rawValue: raw) else {
+                    throw CLIArgumentError("Invalid cookieSource: \(raw).")
+                }
+                return source
+            }
+        case .baseURL:
+            providerConfig.enterpriseHost = value
+        case .workspaceID:
+            providerConfig.workspaceID = value
+        case .region:
+            providerConfig.region = value
+        case .awsProfile:
+            providerConfig.awsProfile = value
+        case .awsAuthMode:
+            providerConfig.awsAuthMode = value
+        case .extrasEnabled:
+            providerConfig.extrasEnabled = try value.map { raw in
+                guard let bool = Self.parseConfigBool(raw) else {
+                    throw CLIArgumentError("Invalid extrasEnabled value: \(raw).")
+                }
+                return bool
+            }
+        }
+
+        updated.setProviderConfig(providerConfig)
+        return updated
+    }
+
     static func configProviderStatuses(
         _ config: CodexBarConfig,
         includeDescriptors: Bool = false) -> [ConfigProviderStatusResult]
@@ -299,28 +472,306 @@ extension CodexBarCLI {
 
     static func configProviderDescriptor(for providerConfig: ProviderConfig) -> ConfigProviderSettingsDescriptor {
         var fields: [ConfigProviderSettingsField] = []
+        let cliName = ProviderDescriptorRegistry.descriptor(for: providerConfig.id).cli.name
+        fields.append(Self.sourceModeField(providerConfig: providerConfig, cliName: cliName))
         if ProviderConfigEnvironment.supportsAPIKeyOverride(for: providerConfig.id) {
-            let cliName = ProviderDescriptorRegistry.descriptor(for: providerConfig.id).cli.name
             fields.append(ConfigProviderSettingsField(
                 id: "apiKey",
                 kind: "secret",
                 title: "API key",
                 description: "Stores a provider API key. Pass the secret on stdin.",
+                value: nil,
                 redactedValue: providerConfig.sanitizedAPIKey == nil ? nil : "configured",
+                required: false,
+                options: nil,
                 writeCommand: [
                     "codexbar",
                     "config",
-                    "set-api-key",
+                    "set",
                     "--provider",
                     cliName,
+                    "--field",
+                    "apiKey",
                     "--stdin",
                     "--json-only",
                 ]))
         }
+        if Self.supportsCookieDescriptorFields(providerConfig.id) {
+            fields.append(Self.cookieSourceField(providerConfig: providerConfig, cliName: cliName))
+            fields.append(Self.cookieHeaderField(providerConfig: providerConfig, cliName: cliName))
+        }
+        if Self.supportsBaseURLDescriptorField(providerConfig.id) {
+            fields.append(Self.textField(
+                id: .baseURL,
+                title: "Base URL",
+                description: "Provider API base URL or enterprise host.",
+                value: providerConfig.sanitizedEnterpriseHost,
+                cliName: cliName))
+        }
+        if Self.supportsWorkspaceDescriptorField(providerConfig.id) {
+            fields.append(Self.textField(
+                id: .workspaceID,
+                title: "Workspace/project ID",
+                description: "Provider workspace, project, or deployment identifier.",
+                value: providerConfig.sanitizedWorkspaceID,
+                cliName: cliName))
+        }
+        if Self.supportsRegionDescriptorField(providerConfig.id) {
+            fields.append(Self.textField(
+                id: .region,
+                title: "Region",
+                description: "Provider region.",
+                value: providerConfig.sanitizedRegion,
+                cliName: cliName))
+        }
+        if providerConfig.id == .bedrock {
+            fields.append(Self.awsAuthModeField(providerConfig: providerConfig, cliName: cliName))
+            fields.append(Self.textField(
+                id: .awsProfile,
+                title: "AWS profile",
+                description: "AWS profile name used when auth mode is profile.",
+                value: providerConfig.sanitizedAWSProfile,
+                cliName: cliName))
+        }
+        if Self.supportsExtrasDescriptorField(providerConfig.id) {
+            fields.append(Self.booleanField(
+                id: .extrasEnabled,
+                title: "Extra usage",
+                description: "Fetch optional provider-specific usage extras when available.",
+                value: providerConfig.extrasEnabled,
+                cliName: cliName))
+        }
+        let actions = Self.configProviderDescriptorActions(for: providerConfig.id, cliName: cliName)
         return ConfigProviderSettingsDescriptor(
             schemaVersion: 1,
             fields: fields,
-            actions: [])
+            actions: actions)
+    }
+
+    static func configProviderActionResult(
+        provider: UsageProvider,
+        action: ConfigProviderAction) throws -> ConfigProviderActionResult
+    {
+        let metadata = ProviderDescriptorRegistry.descriptor(for: provider).metadata
+        switch action {
+        case .openDashboard:
+            guard let url = metadata.dashboardURL ?? metadata.subscriptionDashboardURL else {
+                throw CLIArgumentError("No dashboard URL is configured for \(provider.rawValue).")
+            }
+            return ConfigProviderActionResult(status: "ok", message: "Open dashboard", url: url)
+        }
+    }
+
+    private static func sourceModeField(
+        providerConfig: ProviderConfig,
+        cliName: String) -> ConfigProviderSettingsField
+    {
+        let sourceModes = ProviderSourceMode.allCases.filter {
+            ProviderDescriptorRegistry.descriptor(for: providerConfig.id).fetchPlan.sourceModes.contains($0)
+        }
+        ConfigProviderSettingsField(
+            id: ConfigProviderField.sourceMode.rawValue,
+            kind: "enum",
+            title: "Source",
+            description: "Preferred data source. Automatic lets CodexBar choose the best available source.",
+            value: (providerConfig.source ?? .auto).rawValue,
+            redactedValue: nil,
+            required: false,
+            options: sourceModes.map { ConfigProviderSettingsOption(id: $0.rawValue, title: $0.rawValue) },
+            writeCommand: Self.writeCommand(cliName: cliName, field: .sourceMode, stdin: false))
+    }
+
+    private static func cookieSourceField(
+        providerConfig: ProviderConfig,
+        cliName: String) -> ConfigProviderSettingsField
+    {
+        ConfigProviderSettingsField(
+            id: ConfigProviderField.cookieSource.rawValue,
+            kind: "enum",
+            title: "Cookie source",
+            description: "Choose automatic browser-cookie import, a manual cookie, or disable cookie usage.",
+            value: (providerConfig.cookieSource ?? .auto).rawValue,
+            redactedValue: nil,
+            required: false,
+            options: ProviderCookieSource.allCases.map { ConfigProviderSettingsOption(id: $0.rawValue, title: $0.displayName) },
+            writeCommand: Self.writeCommand(cliName: cliName, field: .cookieSource, stdin: false))
+    }
+
+    private static func cookieHeaderField(
+        providerConfig: ProviderConfig,
+        cliName: String) -> ConfigProviderSettingsField
+    {
+        ConfigProviderSettingsField(
+            id: ConfigProviderField.cookieHeader.rawValue,
+            kind: "secret",
+            title: "Manual cookie",
+            description: "Manual Cookie header used when cookie source is Manual.",
+            value: nil,
+            redactedValue: providerConfig.sanitizedCookieHeader == nil ? nil : "configured",
+            required: false,
+            options: nil,
+            writeCommand: Self.writeCommand(cliName: cliName, field: .cookieHeader, stdin: true))
+    }
+
+    private static func textField(
+        id: ConfigProviderField,
+        title: String,
+        description: String,
+        value: String?,
+        cliName: String) -> ConfigProviderSettingsField
+    {
+        ConfigProviderSettingsField(
+            id: id.rawValue,
+            kind: "text",
+            title: title,
+            description: description,
+            value: value,
+            redactedValue: nil,
+            required: false,
+            options: nil,
+            writeCommand: Self.writeCommand(cliName: cliName, field: id, stdin: false))
+    }
+
+    private static func booleanField(
+        id: ConfigProviderField,
+        title: String,
+        description: String,
+        value: Bool?,
+        cliName: String) -> ConfigProviderSettingsField
+    {
+        ConfigProviderSettingsField(
+            id: id.rawValue,
+            kind: "boolean",
+            title: title,
+            description: description,
+            value: value.map { $0 ? "true" : "false" },
+            redactedValue: nil,
+            required: false,
+            options: nil,
+            writeCommand: Self.writeCommand(cliName: cliName, field: id, stdin: false))
+    }
+
+    private static func awsAuthModeField(
+        providerConfig: ProviderConfig,
+        cliName: String) -> ConfigProviderSettingsField
+    {
+        ConfigProviderSettingsField(
+            id: ConfigProviderField.awsAuthMode.rawValue,
+            kind: "enum",
+            title: "AWS auth mode",
+            description: "Use static access keys or an AWS profile.",
+            value: providerConfig.sanitizedAWSAuthMode ?? "keys",
+            redactedValue: nil,
+            required: false,
+            options: [
+                ConfigProviderSettingsOption(id: "keys", title: "Access keys"),
+                ConfigProviderSettingsOption(id: "profile", title: "AWS profile"),
+            ],
+            writeCommand: Self.writeCommand(cliName: cliName, field: .awsAuthMode, stdin: false))
+    }
+
+    private static func writeCommand(cliName: String, field: ConfigProviderField, stdin: Bool) -> [String] {
+        var command = [
+            "codexbar",
+            "config",
+            "set",
+            "--provider",
+            cliName,
+            "--field",
+            field.rawValue,
+        ]
+        if stdin {
+            command.append("--stdin")
+        } else {
+            command.append(contentsOf: ["--value", "{value}"])
+        }
+        command.append("--json-only")
+        return command
+    }
+
+    private static func configProviderDescriptorActions(
+        for provider: UsageProvider,
+        cliName: String) -> [ConfigProviderSettingsAction]
+    {
+        let metadata = ProviderDescriptorRegistry.descriptor(for: provider).metadata
+        guard metadata.dashboardURL != nil || metadata.subscriptionDashboardURL != nil else {
+            return []
+        }
+        return [
+            ConfigProviderSettingsAction(
+                id: ConfigProviderAction.openDashboard.rawValue,
+                kind: "command",
+                title: "Dashboard",
+                description: "Open the provider dashboard URL reported by the CLI.",
+                command: [
+                    "codexbar",
+                    "config",
+                    "action",
+                    "--provider",
+                    cliName,
+                    "--action",
+                    ConfigProviderAction.openDashboard.rawValue,
+                    "--json-only",
+                ]),
+        ]
+    }
+
+    private static func parseConfigBool(_ raw: String) -> Bool? {
+        switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "1", "true", "yes", "on":
+            true
+        case "0", "false", "no", "off":
+            false
+        default:
+            nil
+        }
+    }
+
+    private static func supportsCookieDescriptorFields(_ provider: UsageProvider) -> Bool {
+        switch provider {
+        case .abacus, .alibaba, .alibabatokenplan, .amp, .augment, .claude, .codex, .commandcode,
+             .cursor, .devin, .factory, .kimi, .manus, .mimo, .minimax, .mistral, .ollama,
+             .opencode, .opencodego, .perplexity, .stepfun, .t3chat, .windsurf:
+            true
+        default:
+            false
+        }
+    }
+
+    private static func supportsBaseURLDescriptorField(_ provider: UsageProvider) -> Bool {
+        switch provider {
+        case .azureopenai, .copilot, .kimi, .litellm, .llmproxy:
+            true
+        default:
+            false
+        }
+    }
+
+    private static func supportsWorkspaceDescriptorField(_ provider: UsageProvider) -> Bool {
+        switch provider {
+        case .azureopenai, .deepgram, .opencode, .opencodego, .openai:
+            true
+        default:
+            false
+        }
+    }
+
+    private static func supportsRegionDescriptorField(_ provider: UsageProvider) -> Bool {
+        switch provider {
+        case .bedrock, .moonshot:
+            true
+        default:
+            false
+        }
+    }
+
+    private static func supportsExtrasDescriptorField(_ provider: UsageProvider) -> Bool {
+        switch provider {
+        case .copilot, .kilo:
+            true
+        default:
+            false
+        }
     }
 
     private static func cleanConfigSecret(_ raw: String?) -> String? {
@@ -453,6 +904,73 @@ struct ConfigSetAPIKeyOptions: CommanderParsable {
     var workspaceId: String?
 }
 
+struct ConfigSetFieldOptions: CommanderParsable {
+    @Flag(names: [.short("v"), .long("verbose")], help: "Enable verbose logging")
+    var verbose: Bool = false
+
+    @Flag(name: .long("json-output"), help: "Emit machine-readable logs")
+    var jsonOutput: Bool = false
+
+    @Option(name: .long("log-level"), help: "Set log level (trace|verbose|debug|info|warning|error|critical)")
+    var logLevel: String?
+
+    @Option(name: .long("format"), help: "Output format: text | json")
+    var format: OutputFormat?
+
+    @Flag(name: .long("json"), help: "")
+    var jsonShortcut: Bool = false
+
+    @Flag(name: .long("json-only"), help: "Emit JSON only (suppress non-JSON output)")
+    var jsonOnly: Bool = false
+
+    @Flag(name: .long("pretty"), help: "Pretty-print JSON output")
+    var pretty: Bool = false
+
+    @Option(name: .long("provider"), help: ProviderHelp.optionHelp)
+    var provider: String?
+
+    @Option(name: .long("field"), help: "Provider field to set")
+    var field: String?
+
+    @Option(name: .long("value"), help: "Field value to store")
+    var value: String?
+
+    @Flag(name: .long("stdin"), help: "Read field value from stdin")
+    var stdin: Bool = false
+
+    @Flag(name: .long("clear"), help: "Clear the field")
+    var clear: Bool = false
+}
+
+struct ConfigActionOptions: CommanderParsable {
+    @Flag(names: [.short("v"), .long("verbose")], help: "Enable verbose logging")
+    var verbose: Bool = false
+
+    @Flag(name: .long("json-output"), help: "Emit machine-readable logs")
+    var jsonOutput: Bool = false
+
+    @Option(name: .long("log-level"), help: "Set log level (trace|verbose|debug|info|warning|error|critical)")
+    var logLevel: String?
+
+    @Option(name: .long("format"), help: "Output format: text | json")
+    var format: OutputFormat?
+
+    @Flag(name: .long("json"), help: "")
+    var jsonShortcut: Bool = false
+
+    @Flag(name: .long("json-only"), help: "Emit JSON only (suppress non-JSON output)")
+    var jsonOnly: Bool = false
+
+    @Flag(name: .long("pretty"), help: "Pretty-print JSON output")
+    var pretty: Bool = false
+
+    @Option(name: .long("provider"), help: ProviderHelp.optionHelp)
+    var provider: String?
+
+    @Option(name: .long("action"), help: "Provider action to run")
+    var action: String?
+}
+
 struct ConfigProviderToggleOptions: CommanderParsable {
     @Flag(names: [.short("v"), .long("verbose")], help: "Enable verbose logging")
     var verbose: Bool = false
@@ -485,6 +1003,20 @@ private struct ConfigSetAPIKeyResult: Encodable {
     let configPath: String
 }
 
+struct ConfigSetProviderFieldResult: Encodable {
+    let provider: String
+    let field: String
+    let configured: Bool
+    let enabled: Bool
+    let configPath: String
+}
+
+struct ConfigProviderActionResult: Encodable {
+    let status: String
+    let message: String
+    let url: String?
+}
+
 struct ConfigProviderStatusResult: Encodable, Equatable {
     let provider: String
     let displayName: String
@@ -504,8 +1036,16 @@ struct ConfigProviderSettingsField: Encodable, Equatable {
     let kind: String
     let title: String
     let description: String?
+    let value: String?
     let redactedValue: String?
+    let required: Bool
+    let options: [ConfigProviderSettingsOption]?
     let writeCommand: [String]?
+}
+
+struct ConfigProviderSettingsOption: Encodable, Equatable {
+    let id: String
+    let title: String
 }
 
 struct ConfigProviderSettingsAction: Encodable, Equatable {
@@ -514,6 +1054,23 @@ struct ConfigProviderSettingsAction: Encodable, Equatable {
     let title: String
     let description: String?
     let command: [String]
+}
+
+enum ConfigProviderField: String {
+    case sourceMode
+    case apiKey
+    case cookieSource
+    case cookieHeader
+    case baseURL
+    case workspaceID
+    case region
+    case awsProfile
+    case awsAuthMode
+    case extrasEnabled
+}
+
+enum ConfigProviderAction: String {
+    case openDashboard
 }
 
 private struct ConfigProviderToggleResult: Encodable {

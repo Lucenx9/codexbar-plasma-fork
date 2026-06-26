@@ -121,6 +121,10 @@ extension CodexBarCLI {
           codexbar config providers [--descriptors] [--format text|json] [--json] [--json-only] [--pretty]
           codexbar config enable --provider <name> [--format text|json] [--json] [--json-only] [--pretty]
           codexbar config disable --provider <name> [--format text|json] [--json] [--json-only] [--pretty]
+          codexbar config set --provider <name> --field <field> (--value <value>|--stdin|--clear)
+                             [--format text|json] [--json] [--json-only] [--pretty]
+          codexbar config action --provider <name> --action <action>
+                                [--format text|json] [--json] [--json-only] [--pretty]
           codexbar config set-api-key --provider <name> (--api-key <key>|--stdin)
                                     [--label <label>] [--usage-scope team]
                                     [--organization-id <org>] [--workspace-id <project>]
@@ -131,6 +135,9 @@ extension CodexBarCLI {
           Validate or print the CodexBar config file (default: validate).
           providers lists persistent provider enablement; add --descriptors for JSON-described provider settings.
           enable/disable updates the same provider toggle used by Settings.
+          set writes descriptor-backed provider fields such as sourceMode, cookieSource, apiKey, baseURL,
+          workspaceID, region, and extrasEnabled. Secret fields should use --stdin.
+          action runs descriptor-backed provider actions and returns structured JSON.
           set-api-key stores a provider API key in the resolved config file and enables that provider by default.
           For z.ai team usage, add --usage-scope team with BigModel organization and project IDs; this stores
           the key as a token account instead of a provider-level personal key.
@@ -141,6 +148,8 @@ extension CodexBarCLI {
           codexbar config providers --descriptors --json-only
           codexbar config enable --provider grok
           codexbar config disable --provider cursor
+          codexbar config set --provider amp --field sourceMode --value api --json-only
+          codexbar config action --provider openai --action openDashboard --json-only
           printf '%s' "$ELEVENLABS_API_KEY" | codexbar config set-api-key --provider elevenlabs --stdin
           printf '%s' "$Z_AI_API_KEY" | codexbar config set-api-key --provider zai --stdin \\
             --label Team --usage-scope team --organization-id org_... --workspace-id proj_...

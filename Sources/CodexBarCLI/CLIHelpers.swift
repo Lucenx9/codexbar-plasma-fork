@@ -397,6 +397,14 @@ extension CodexBarCLI {
         CommandSignature.describe(ConfigProviderToggleOptions())
     }
 
+    static func _configSetFieldSignatureForTesting() -> CommandSignature {
+        CommandSignature.describe(ConfigSetFieldOptions())
+    }
+
+    static func _configActionSignatureForTesting() -> CommandSignature {
+        CommandSignature.describe(ConfigActionOptions())
+    }
+
     static func _decodeFormatForTesting(from values: ParsedValues) -> OutputFormat {
         self.decodeFormat(from: values)
     }

@@ -145,6 +145,36 @@ struct CLIConfigCommandTests {
     }
 
     @Test
+    func `config set parses provider field value and json flags`() throws {
+        let parser = CommandParser(signature: CodexBarCLI._configSetFieldSignatureForTesting())
+        let parsed = try parser.parse(arguments: [
+            "--provider", "amp",
+            "--field", "sourceMode",
+            "--value", "api",
+            "--json-only",
+        ])
+
+        #expect(parsed.options["provider"] == ["amp"])
+        #expect(parsed.options["field"] == ["sourceMode"])
+        #expect(parsed.options["value"] == ["api"])
+        #expect(CodexBarCLI._decodeFormatForTesting(from: parsed) == .json)
+    }
+
+    @Test
+    func `config action parses provider action and json flags`() throws {
+        let parser = CommandParser(signature: CodexBarCLI._configActionSignatureForTesting())
+        let parsed = try parser.parse(arguments: [
+            "--provider", "openai",
+            "--action", "openDashboard",
+            "--json-only",
+        ])
+
+        #expect(parsed.options["provider"] == ["openai"])
+        #expect(parsed.options["action"] == ["openDashboard"])
+        #expect(CodexBarCLI._decodeFormatForTesting(from: parsed) == .json)
+    }
+
+    @Test
     func `config provider descriptors include redacted api key write command`() throws {
         let config = CodexBarConfig(providers: [
             ProviderConfig(id: .elevenlabs, enabled: true, apiKey: "xi-secret-token"),
@@ -161,12 +191,77 @@ struct CLIConfigCommandTests {
         #expect(field.writeCommand == [
             "codexbar",
             "config",
-            "set-api-key",
+            "set",
             "--provider",
             "elevenlabs",
+            "--field",
+            "apiKey",
             "--stdin",
             "--json-only",
         ])
+    }
+
+    @Test
+    func `config provider descriptors include generic source cookie and dashboard actions`() throws {
+        let config = CodexBarConfig(providers: [
+            ProviderConfig(
+                id: .amp,
+                enabled: true,
+                source: .web,
+                cookieSource: .manual,
+                cookieHeader: "amp-cookie"),
+        ])
+        let statuses = CodexBarCLI.configProviderStatuses(config, includeDescriptors: true)
+        let amp = try #require(statuses.first { $0.provider == "amp" })
+        let descriptor = try #require(amp.descriptor)
+        let source = try #require(descriptor.fields.first { $0.id == "sourceMode" })
+        let cookieSource = try #require(descriptor.fields.first { $0.id == "cookieSource" })
+        let cookieHeader = try #require(descriptor.fields.first { $0.id == "cookieHeader" })
+        let dashboard = try #require(descriptor.actions.first { $0.id == "openDashboard" })
+
+        #expect(source.kind == "enum")
+        #expect(source.value == "web")
+        #expect(source.options?.map(\.id) == ["auto", "web", "cli", "api"])
+        #expect(source.writeCommand?.contains("{value}") == true)
+        #expect(cookieSource.kind == "enum")
+        #expect(cookieSource.value == "manual")
+        #expect(cookieHeader.kind == "secret")
+        #expect(cookieHeader.redactedValue == "configured")
+        #expect(dashboard.command == [
+            "codexbar",
+            "config",
+            "action",
+            "--provider",
+            "amp",
+            "--action",
+            "openDashboard",
+            "--json-only",
+        ])
+    }
+
+    @Test
+    func `config set stores generic provider fields`() throws {
+        var config = CodexBarConfig.makeDefault()
+        config = try CodexBarCLI.configSettingProviderField(
+            config,
+            provider: .amp,
+            field: .sourceMode,
+            value: "api")
+        config = try CodexBarCLI.configSettingProviderField(
+            config,
+            provider: .amp,
+            field: .cookieSource,
+            value: "manual")
+        config = try CodexBarCLI.configSettingProviderField(
+            config,
+            provider: .amp,
+            field: .cookieHeader,
+            value: "cookie=value")
+
+        let amp = try #require(config.providerConfig(for: .amp))
+        #expect(amp.source == .api)
+        #expect(amp.cookieSource == .manual)
+        #expect(amp.sanitizedCookieHeader == "cookie=value")
     }
 
     @Test
@@ -211,6 +306,8 @@ struct CLIConfigCommandTests {
 
         #expect(help.contains("config set-api-key --provider <name>"))
         #expect(help.contains("config providers"))
+        #expect(help.contains("config set --provider <name> --field <field>"))
+        #expect(help.contains("config action --provider <name> --action <action>"))
         #expect(help.contains("config enable --provider <name>"))
         #expect(help.contains("config disable --provider <name>"))
         #expect(help.contains("--stdin"))

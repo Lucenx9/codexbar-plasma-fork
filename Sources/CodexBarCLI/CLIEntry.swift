@@ -54,6 +54,10 @@ enum CodexBarCLI {
                 self.runConfigSetProviderEnabled(invocation.parsedValues, enabled: true)
             case ["config", "disable"]:
                 self.runConfigSetProviderEnabled(invocation.parsedValues, enabled: false)
+            case ["config", "set"]:
+                self.runConfigSetProviderField(invocation.parsedValues)
+            case ["config", "action"]:
+                self.runConfigAction(invocation.parsedValues)
             case ["config", "set-api-key"]:
                 self.runConfigSetAPIKey(invocation.parsedValues)
             case ["cache", "clear"]:
@@ -85,6 +89,8 @@ enum CodexBarCLI {
         let configSignature = CommandSignature.describe(ConfigOptions())
         let configProvidersSignature = CommandSignature.describe(ConfigProvidersOptions())
         let configProviderToggleSignature = CommandSignature.describe(ConfigProviderToggleOptions())
+        let configSetFieldSignature = CommandSignature.describe(ConfigSetFieldOptions())
+        let configActionSignature = CommandSignature.describe(ConfigActionOptions())
         let configSetAPIKeySignature = CommandSignature.describe(ConfigSetAPIKeyOptions())
         let cacheSignature = CommandSignature.describe(CacheOptions())
         let diagnoseSignature = CommandSignature.describe(DiagnoseOptions())
@@ -136,6 +142,16 @@ enum CodexBarCLI {
                         abstract: "Disable a provider",
                         discussion: nil,
                         signature: configProviderToggleSignature),
+                    CommandDescriptor(
+                        name: "set",
+                        abstract: "Set a provider config field",
+                        discussion: nil,
+                        signature: configSetFieldSignature),
+                    CommandDescriptor(
+                        name: "action",
+                        abstract: "Run a provider config action",
+                        discussion: nil,
+                        signature: configActionSignature),
                     CommandDescriptor(
                         name: "set-api-key",
                         abstract: "Store a provider API key",
