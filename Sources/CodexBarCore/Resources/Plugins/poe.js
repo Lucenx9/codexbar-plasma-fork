@@ -129,18 +129,20 @@ defineProvider({
     }
     const days = Array.from(daily.entries()).sort((a, b) => a[0].localeCompare(b[0]));
     const summarize = (count) =>
-      days.slice(-count).reduce(
-        (sum, item) => {
-          sum.points += item[1].points;
-          sum.requests += item[1].requests;
-          if (item[1].hasCost) {
-            sum.cost += item[1].cost;
-            sum.hasCost = true;
-          }
-          return sum;
-        },
-        { points: 0, requests: 0, cost: 0, hasCost: false },
-      );
+      entries
+        .filter((entry) => entry.date.getTime() >= ctx.date.nowMillis() - count * 86400000)
+        .reduce(
+          (sum, entry) => {
+            sum.points += entry.points;
+            sum.requests += 1;
+            if (entry.cost !== null) {
+              sum.cost += Math.max(0, entry.cost);
+              sum.hasCost = true;
+            }
+            return sum;
+          },
+          { points: 0, requests: 0, cost: 0, hasCost: false },
+        );
     const seven = summarize(7);
     const thirty = summarize(30);
     const now = ctx.date.now();

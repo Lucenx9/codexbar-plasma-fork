@@ -1,0 +1,40 @@
+Poe weekly history proof
+Baseline: c15f736ef42158b830b47db1970ea91886e30e85
+
+The proof runs the unchanged bundled fetchUsage function in Node with synthetic HTTP responses and a frozen ctx.date clock. It does not exercise the Swift bridge, QuickJS/JSC, or AppKit.
+
+$ node .github/pr-proof/poe-weekly-history.mjs baseline
+{"case":"sparse history and cutoff","rows":[{"label":"Current balance","value":"2,500 points"},{"label":"Today","value":"10 points","secondaryValue":"1 requests · $0.01"},{"label":"Last 7 days","value":"1,030 points","secondaryValue":"4 requests · $1.03"},{"label":"Last 30 days","value":"1,030 points","secondaryValue":"4 requests · $1.03"}]}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
++ actual - expected
+
++ '1,030 points'
+- '30 points'
+
+    at file:///home/simone/code/CodexBar/.github/pr-proof/poe-weekly-history.mjs:42:8 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: '1,030 points',
+  expected: '30 points',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.15.0
+Exit code: 1
+
+$ node .github/pr-proof/poe-weekly-history.mjs
+{"case":"sparse history and cutoff","rows":[{"label":"Current balance","value":"2,500 points"},{"label":"Today","value":"10 points","secondaryValue":"1 requests · $0.01"},{"label":"Last 7 days","value":"30 points","secondaryValue":"2 requests · $0.03"},{"label":"Last 30 days","value":"1,030 points","secondaryValue":"4 requests · $1.03"}]}
+{"case":"eight days later","rows":[{"label":"Current balance","value":"2,500 points"},{"label":"Today","value":"0 points","secondaryValue":"0 requests"},{"label":"Last 7 days","value":"0 points","secondaryValue":"0 requests"},{"label":"Last 30 days","value":"1,030 points","secondaryValue":"4 requests · $1.03"}]}
+PASS: sparse history, exact 7-day cutoff, one-second exclusion, empty week, 30-day totals, chart, and balance retention
+Exit code: 0
+
+Validation limits
+make test: blocked because swift is not installed.
+make check: blocked because plutil is not installed on this Linux host.
+Scripts/lint.sh lint-linux: portable checks, JavaScript formatting/lint, and TypeScript checks passed; SwiftLint could not load libsourcekitdInProc.so.
+Changed Swift test file passed SwiftFormat. Full Swift tests must run in CI.
