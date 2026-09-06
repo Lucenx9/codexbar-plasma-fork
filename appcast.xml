@@ -3,6 +3,34 @@
     <channel>
         <title>CodexBar</title>
         <item>
+            <title>0.56.7</title>
+            <pubDate>Sun, 06 Sep 2026 07:58:20 -0700</pubDate>
+            <link>https://raw.githubusercontent.com/steipete/CodexBar/main/appcast.xml</link>
+            <sparkle:version>138</sparkle:version>
+            <sparkle:shortVersionString>0.56.7</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>CodexBar 0.56.7</h2>
+<h3>Highlights</h3>
+<ul>
+<li><strong>Live widget freshness labels</strong>: snapshot and stale token-history ages keep advancing between timeline reloads (#3445; partial fix for #3339).</li>
+<li><strong>Reliable Linux caches</strong>: preserve model pricing and Pi/OMP cost history across repeated refreshes (#3444, #3446).</li>
+<li><strong>Clearer provider usage</strong>: retain Command Code monthly usage during subscription timeouts, show Moonshot balances in the correct currency, and explain ElevenLabs API key failures (#3441, #3438, #3437).</li>
+</ul>
+<h3>Fixed</h3>
+<ul>
+<li>Widgets: keep snapshot and stale token-history age labels advancing between timeline reloads, so paused widgets no longer retain fresh-looking timestamps (#3445; partial fix for #3339). Thanks @zhulijin1991!</li>
+<li>Usage &amp; Spend: keep stacked daily and hourly chart segments flush at provider boundaries, rounding only the top of each bar (#3439). Thanks @elijahfriedman!</li>
+<li>Command Code: retain the last confirmed plan for its billing period so subscription timeouts do not erase monthly usage; show the monthly row as unavailable when no plan is known, while preserving rolling five-hour and weekly usage (#3441). Thanks @enieuwy!</li>
+<li>Moonshot: show China-region balances and deficits in CNY while retaining USD for international accounts (#3434, #3438). Thanks @SomSamantray and @doraemonke!</li>
+<li>ElevenLabs: distinguish a missing API key from a rejected key, missing subscription-read permission, or access restrictions, including current and legacy API error formats (#3437). Thanks @benmillerat!</li>
+<li>Pi and OMP cost history: preserve the session cache across repeated Linux refreshes, including saved scan state, provider totals, pricing metadata, and timezone information (#3446).</li>
+<li>Model pricing: preserve cached catalogs across repeated Linux refreshes (#3444; extracted from #3412). Thanks @WeGoToMars!</li>
+</ul>
+<p><a href="https://github.com/steipete/CodexBar/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/steipete/CodexBar/releases/download/v0.56.7/CodexBar-macos-universal-0.56.7.zip" length="68939297" type="application/octet-stream" sparkle:edSignature="HtwgqTGO6bTSAAk66NMS1YIseQ/SXM63G5XjFWn11Ercp22ikUCszfradDI2mobXNTjgHOijpVEZWOGvWaqIBg=="/>
+        </item>
+        <item>
             <title>0.56.6</title>
             <pubDate>Sat, 05 Sep 2026 06:52:52 -0700</pubDate>
             <link>https://raw.githubusercontent.com/steipete/CodexBar/main/appcast.xml</link>
@@ -67,35 +95,6 @@
 <p><a href="https://github.com/steipete/CodexBar/blob/main/CHANGELOG.md">View full changelog</a></p>
 ]]></description>
             <enclosure url="https://github.com/steipete/CodexBar/releases/download/v0.56.5/CodexBar-macos-universal-0.56.5.zip" length="68562638" type="application/octet-stream" sparkle:edSignature="+DvuYBIpAX00vqsSs1vz99hbDQsccJGmTRk1+Y+T/qK8N+yNPp1XRHvNYoIjIXIO1m7xMEPy0P7sD+GNETPMAQ=="/>
-        </item>
-        <item>
-            <title>0.56.4</title>
-            <pubDate>Thu, 03 Sep 2026 06:11:55 -0700</pubDate>
-            <link>https://raw.githubusercontent.com/steipete/CodexBar/main/appcast.xml</link>
-            <sparkle:version>135</sparkle:version>
-            <sparkle:shortVersionString>0.56.4</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>CodexBar 0.56.4</h2>
-<h3>Fixed</h3>
-<ul>
-<li>Codex: let cost-history catch-up finish while active rollout files keep growing, preserving complete session and subagent accounting without publishing partial tails (#3243, #3314). Thanks @LeoLin990405!</li>
-<li>Antigravity: restore token history from newer local sessions whose timestamps moved to the steps table, while rejecting missing, duplicate, or conflicting timestamp evidence instead of inventing dates (#3266, #3396). Thanks @chid!</li>
-<li>Codex: keep each managed account&#x27;s selected workspace authoritative across stacked refreshes, credits, history, menu rows, reconciliation, and System Account promotion instead of reverting to or rewriting the auth file&#x27;s default workspace (#3347, #3348, #3386). Thanks @krevoit!</li>
-<li>Settings: prevent scrolled detail content from bleeding through the native title bar while retaining the edge-to-edge sidebar and native window title (#3235, #3315). Thanks @LeoLin990405!</li>
-<li>Claude: recognize Cloudflare web challenges without discarding valid cached cookies or prior usage, and offer explicit OAuth or network recovery guidance (#3367, #3375). Thanks @TPuHo4u!</li>
-<li>Antigravity: recover Linux port discovery when <code>lsof</code> fails with mount-namespace warnings, while preserving authentication errors and the existing startup deadline (#3362, #3364). Thanks @srijits!</li>
-<li>Menu bar: let live forecast and detail labels use the full row width, preventing text from clipping to its previous width until the menu reopens (#3370).</li>
-<li>Settings: open the About pane from the application menu as well as the status menu, reusing the existing Settings window (#3391). Thanks @elijahfriedman!</li>
-<li>Menu bar: discard non-finite saved status-item positions before AppKit restores them, preserving valid placements (#3361; investigated alongside #3355). Thanks @foobra!</li>
-<li>Claude: remove misleading defaults-suite warnings at launch while preserving shared OAuth preferences for the CLI and widget (#3381, #3384). Thanks @andresg747!</li>
-</ul>
-<h3>Documentation</h3>
-<ul>
-<li>AWS Bedrock: explain that monitoring API calls may incur charges, how shared refresh controls affect them, and why Manual mode and the displayed budget do not impose a billing cap (#3387, #3393). Thanks @kyen99!</li>
-</ul>
-<p><a href="https://github.com/steipete/CodexBar/blob/main/CHANGELOG.md">View full changelog</a></p>
-]]></description>
-            <enclosure url="https://github.com/steipete/CodexBar/releases/download/v0.56.4/CodexBar-macos-universal-0.56.4.zip" length="68345622" type="application/octet-stream" sparkle:edSignature="1mCoyhn7I6ciigFUxURMJdQNqlk1e6vcnAc307rHv2kk8o51wv9Ul9BN5iMBdxuU0gOiKLb+WO4zBqkQx0/1BA=="/>
         </item>
         <item>
             <title>0.14.0</title>
