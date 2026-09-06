@@ -163,7 +163,7 @@ class MiMoUsageParsingTests(unittest.TestCase):
                     "input": 24, "output": 6, "cache_read": 0, "cache_create": 0, "messages": 2,
                 })
                 self.assertEqual(sessions, 1)
-                self.assertEqual(last_activity, datetime.fromisoformat(timestamp))
+                self.assertEqual(last_activity, datetime(2026, 1, 1, 12, tzinfo=timezone.utc))
 
     def test_invalid_update_does_not_replace_valid_usage_for_the_same_request(self):
         module = load_mimo_usage()
@@ -185,7 +185,7 @@ class MiMoUsageParsingTests(unittest.TestCase):
         self.assertEqual(windows["all_time"], {
             "input": 12, "output": 3, "cache_read": 0, "cache_create": 0, "messages": 1,
         })
-        self.assertEqual(last_activity, datetime.fromisoformat(valid["timestamp"]))
+        self.assertEqual(last_activity, datetime(2026, 1, 1, 12, tzinfo=timezone.utc))
 
 
 if __name__ == "__main__":
