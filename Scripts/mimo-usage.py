@@ -25,6 +25,12 @@ PROJECTS_DIR = MIMO_HOME / ".claude" / "projects"
 CACHE_PATH = Path(
     os.environ.get("MIMO_LOCAL_USAGE_PATH", Path.home() / ".codexbar" / "mimo-local-usage.json")
 ).expanduser()
+TOKEN_FIELDS = {
+    "input": "input_tokens",
+    "output": "output_tokens",
+    "cache_read": "cache_read_input_tokens",
+    "cache_create": "cache_creation_input_tokens",
+}
 
 
 def parse_session_usage(jsonl_path: Path):
@@ -46,10 +52,8 @@ def parse_session_usage(jsonl_path: Path):
                     if not isinstance(ts, str) or not ts:
                         continue
                     usage = {
-                        key: int(usage.get(key, 0) or 0)
-                        for key in (
-                            "input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"
-                        )
+                        name: int(usage.get(field, 0) or 0)
+                        for name, field in TOKEN_FIELDS.items()
                     }
                     metadata = d.get("metadata")
                     message_metadata = msg.get("metadata")
@@ -85,11 +89,8 @@ def aggregate_usage():
     # Week starts on Monday 00:00 UTC
     week_start = today_start - timedelta(days=today_start.weekday())
 
-    windows = {
-        "today": {"input": 0, "output": 0, "cache_read": 0, "cache_create": 0, "messages": 0},
-        "week": {"input": 0, "output": 0, "cache_read": 0, "cache_create": 0, "messages": 0},
-        "all_time": {"input": 0, "output": 0, "cache_read": 0, "cache_create": 0, "messages": 0},
-    }
+    cutoffs = {"today": today_start, "week": week_start, "all_time": None}
+    windows = {name: dict.fromkeys((*TOKEN_FIELDS, "messages"), 0) for name in cutoffs}
     sessions_scanned = 0
     last_activity = None
     keyed_rows = {}
@@ -118,37 +119,15 @@ def aggregate_usage():
                     keyed_rows[identity] = row
 
     for ts, usage in [*keyed_rows.values(), *unkeyed_rows]:
-        input_t = int(usage.get("input_tokens", 0) or 0)
-        output_t = int(usage.get("output_tokens", 0) or 0)
-        cache_read_t = int(usage.get("cache_read_input_tokens", 0) or 0)
-        cache_create_t = int(usage.get("cache_creation_input_tokens", 0) or 0)
-
         if last_activity is None or ts > last_activity:
             last_activity = ts
 
-        # all_time
-        w = windows["all_time"]
-        w["input"] += input_t
-        w["output"] += output_t
-        w["cache_read"] += cache_read_t
-        w["cache_create"] += cache_create_t
-        w["messages"] += 1
-
-        if ts >= week_start:
-            w = windows["week"]
-            w["input"] += input_t
-            w["output"] += output_t
-            w["cache_read"] += cache_read_t
-            w["cache_create"] += cache_create_t
-            w["messages"] += 1
-
-        if ts >= today_start:
-            w = windows["today"]
-            w["input"] += input_t
-            w["output"] += output_t
-            w["cache_read"] += cache_read_t
-            w["cache_create"] += cache_create_t
-            w["messages"] += 1
+        for name, cutoff in cutoffs.items():
+            if cutoff is not None and ts < cutoff:
+                continue
+            for field, value in usage.items():
+                windows[name][field] += value
+            windows[name]["messages"] += 1
 
     return windows, sessions_scanned, last_activity
 

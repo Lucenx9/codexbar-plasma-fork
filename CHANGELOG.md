@@ -1,15 +1,25 @@
 # Changelog
 
-## 0.56.7 — Unreleased
+## 0.56.8 — Unreleased
 
 ### Fixed
-- Widgets: keep snapshot and stale token-history age labels advancing between timeline reloads, so paused widgets no longer retain fresh-looking timestamps (partial fix for #3339).
-- Pi and OMP cost history: keep the session cache intact across Linux refreshes by replacing it with one atomic write, preserving saved scan state, provider totals, pricing metadata, and timezone information.
-- Model pricing: keep the cached catalog readable when refreshing it on Linux, using one atomic write instead of a redundant file-replacement sequence (extracted from #3412). Thanks @WeGoToMars!
-- ElevenLabs: distinguish a missing API key from a rejected key, missing subscription-read permission, or access restrictions, including current and legacy API error formats (#3437). Thanks @benmillerat!
-- Command Code: keep the resolved subscription plan in memory for its billing period so a timed-out plan lookup still sizes the monthly credits row from fresh credits, and report that row as unavailable rather than untouched when no plan is known; rolling five-hour and weekly usage stay unaffected (#3441). Thanks @enieuwy!
-- Moonshot: show China-region balances and deficits in CNY while retaining USD for international accounts (#3434, #3438). Thanks @SomSamantray and @doraemonke!
+- MiMo: skip malformed local session rows before deduplication so valid usage still refreshes the cache, preserving all token buckets and UTC daily/weekly totals with shared aggregation (#3448). Thanks @Lucenx9!
+
+## 0.56.7 — 2026-09-06
+
+### Highlights
+- **Live widget freshness labels**: snapshot and stale token-history ages keep advancing between timeline reloads (#3445; partial fix for #3339).
+- **Reliable Linux caches**: preserve model pricing and Pi/OMP cost history across repeated refreshes (#3444, #3446).
+- **Clearer provider usage**: retain Command Code monthly usage during subscription timeouts, show Moonshot balances in the correct currency, and explain ElevenLabs API key failures (#3441, #3438, #3437).
+
+### Fixed
+- Widgets: keep snapshot and stale token-history age labels advancing between timeline reloads, so paused widgets no longer retain fresh-looking timestamps (#3445; partial fix for #3339). Thanks @zhulijin1991!
 - Usage & Spend: keep stacked daily and hourly chart segments flush at provider boundaries, rounding only the top of each bar (#3439). Thanks @elijahfriedman!
+- Command Code: retain the last confirmed plan for its billing period so subscription timeouts do not erase monthly usage; show the monthly row as unavailable when no plan is known, while preserving rolling five-hour and weekly usage (#3441). Thanks @enieuwy!
+- Moonshot: show China-region balances and deficits in CNY while retaining USD for international accounts (#3434, #3438). Thanks @SomSamantray and @doraemonke!
+- ElevenLabs: distinguish a missing API key from a rejected key, missing subscription-read permission, or access restrictions, including current and legacy API error formats (#3437). Thanks @benmillerat!
+- Pi and OMP cost history: preserve the session cache across repeated Linux refreshes, including saved scan state, provider totals, pricing metadata, and timezone information (#3446).
+- Model pricing: preserve cached catalogs across repeated Linux refreshes (#3444; extracted from #3412). Thanks @WeGoToMars!
 
 ## 0.56.6 — 2026-09-05
 

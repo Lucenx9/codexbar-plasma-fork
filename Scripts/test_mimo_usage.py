@@ -138,6 +138,39 @@ class MiMoUsageCacheTests(unittest.TestCase):
 
 
 class MiMoUsageParsingTests(unittest.TestCase):
+    def test_windows_preserve_utc_boundaries_and_all_token_fields(self):
+        module = load_mimo_usage()
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return datetime(2026, 1, 11, 12, tzinfo=timezone.utc)
+
+        rows = [
+            {"timestamp": timestamp, "message": {"usage": {
+                "input_tokens": amount, "output_tokens": amount * 2,
+                "cache_read_input_tokens": amount * 3, "cache_creation_input_tokens": amount * 4,
+            }}}
+            for timestamp, amount in [
+                ("2026-01-04T23:59:59Z", 1),
+                ("2026-01-05T00:00:00Z", 10),
+                ("2026-01-10T23:59:59Z", 100),
+                ("2026-01-11T00:00:00Z", 1000),
+            ]
+        ]
+        with tempfile.TemporaryDirectory(prefix="codexbar-mimo-windows-") as root:
+            projects = Path(root)
+            (projects / "session.jsonl").write_text("\n".join(json.dumps(row) for row in rows))
+            with patch.object(module, "PROJECTS_DIR", projects), patch.object(module, "datetime", FixedDateTime):
+                windows, sessions, last_activity = module.aggregate_usage()
+        for name, amount, count in [("today", 1000, 1), ("week", 1110, 3), ("all_time", 1111, 4)]:
+            self.assertEqual(windows[name], {
+                "input": amount, "output": amount * 2, "cache_read": amount * 3,
+                "cache_create": amount * 4, "messages": count,
+            })
+        self.assertEqual(sessions, 1)
+        self.assertEqual(last_activity, datetime(2026, 1, 11, tzinfo=timezone.utc))
+
     def test_invalid_utf8_does_not_discard_valid_rows_in_the_same_file(self):
         module = load_mimo_usage()
         valid = json.dumps({
