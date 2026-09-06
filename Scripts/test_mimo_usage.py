@@ -138,6 +138,22 @@ class MiMoUsageCacheTests(unittest.TestCase):
 
 
 class MiMoUsageParsingTests(unittest.TestCase):
+    def test_invalid_utf8_does_not_discard_valid_rows_in_the_same_file(self):
+        module = load_mimo_usage()
+        valid = json.dumps({
+            "timestamp": "2026-01-01T12:00:00Z", "message": {"usage": {"input_tokens": 12}},
+        }).encode("utf-8")
+        for rows in ([valid, b"\xff", valid], [valid, valid, b"\xe2\x82"]):
+            with self.subTest(rows=rows), tempfile.TemporaryDirectory(prefix="codexbar-mimo-utf8-") as root:
+                projects = Path(root)
+                (projects / "session.jsonl").write_bytes(b"\n".join(rows))
+                with patch.object(module, "PROJECTS_DIR", projects):
+                    windows, sessions, last_activity = module.aggregate_usage()
+                self.assertEqual(windows["all_time"]["input"], 24)
+                self.assertEqual(windows["all_time"]["messages"], 2)
+                self.assertEqual(sessions, 1)
+                self.assertEqual(last_activity, datetime(2026, 1, 1, 12, tzinfo=timezone.utc))
+
     def test_invalid_rows_do_not_prevent_valid_usage_from_being_counted(self):
         module = load_mimo_usage()
         timestamp = "2026-01-01T12:00:00Z"

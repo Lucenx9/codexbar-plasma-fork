@@ -16,6 +16,7 @@ source = (
 )
 valid = {"timestamp": "2026-01-01T12:00:00Z", "message": {"usage": {"input_tokens": 12}}}
 cases = {
+    "invalid UTF-8": b"\xff",
     "non-object JSON": [],
     "numeric timestamp": {**valid, "timestamp": 123},
     "invalid token count": {**valid, "message": {"usage": {"input_tokens": "unknown"}}},
@@ -28,7 +29,10 @@ for label, invalid in cases.items():
         candidate.write_text(source)
         projects = root / "home" / ".claude" / "projects"
         projects.mkdir(parents=True)
-        (projects / "session.jsonl").write_text("\n".join(json.dumps(row) for row in [valid, invalid, valid]))
+        (projects / "session.jsonl").write_bytes(b"\n".join(
+            row if isinstance(row, bytes) else json.dumps(row).encode("utf-8")
+            for row in [valid, invalid, valid]
+        ))
         cache = root / "usage.json"
         result = subprocess.run(
             [sys.executable, str(candidate), "--json"],

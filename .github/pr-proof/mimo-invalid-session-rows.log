@@ -1,120 +1,78 @@
-MiMo invalid session rows proof
+MiMo malformed-record proof
 Baseline: c15f736ef42158b830b47db1970ea91886e30e85
 
-The proof executes the production Python CLI with synthetic JSONL files, an isolated session root, and an isolated output cache. No real account data is read.
+The proof executes the production Python CLI with synthetic JSONL files, an isolated session root, and an isolated output cache. It reads no account data. The current proof covers invalid UTF-8, non-object JSON, non-string timestamps, and invalid token counts.
 
 $ python3 .github/pr-proof/mimo-invalid-session-rows.py baseline
+{"case": "invalid UTF-8", "exit_code": 1, "cache_written": false, "error": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff in position 82: invalid start byte"}
 {"case": "non-object JSON", "exit_code": 1, "cache_written": false, "error": "AttributeError: 'list' object has no attribute 'get'"}
 {"case": "numeric timestamp", "exit_code": 1, "cache_written": false, "error": "AttributeError: 'int' object has no attribute 'replace'"}
 {"case": "invalid token count", "exit_code": 1, "cache_written": false, "error": "ValueError: invalid literal for int() with base 10: 'unknown'"}
-FAIL: 0/3 CLI fixtures refreshed the cache
+FAIL: 0/4 CLI fixtures refreshed the cache
 Exit code: 1
 
 $ python3 .github/pr-proof/mimo-invalid-session-rows.py
+{"case": "invalid UTF-8", "exit_code": 0, "cache_written": true, "totals": {"input": 24, "output": 0, "cache_read": 0, "cache_create": 0, "messages": 2}}
 {"case": "non-object JSON", "exit_code": 0, "cache_written": true, "totals": {"input": 24, "output": 0, "cache_read": 0, "cache_create": 0, "messages": 2}}
 {"case": "numeric timestamp", "exit_code": 0, "cache_written": true, "totals": {"input": 24, "output": 0, "cache_read": 0, "cache_create": 0, "messages": 2}}
 {"case": "invalid token count", "exit_code": 0, "cache_written": true, "totals": {"input": 24, "output": 0, "cache_read": 0, "cache_create": 0, "messages": 2}}
-PASS: 3/3 CLI fixtures refreshed the cache
+PASS: 4/4 CLI fixtures refreshed the cache
 Exit code: 0
 
-$ python3 Scripts/test_mimo_usage.py -v
-test_concurrent_writers_publish_without_colliding (__main__.MiMoUsageCacheTests.test_concurrent_writers_publish_without_colliding) ... ok
-test_failed_publication_preserves_cache_and_other_writers_temporary_files (__main__.MiMoUsageCacheTests.test_failed_publication_preserves_cache_and_other_writers_temporary_files) ... ok
-test_invalid_rows_do_not_prevent_valid_usage_from_being_counted (__main__.MiMoUsageParsingTests.test_invalid_rows_do_not_prevent_valid_usage_from_being_counted) ... ok
-test_invalid_update_does_not_replace_valid_usage_for_the_same_request (__main__.MiMoUsageParsingTests.test_invalid_update_does_not_replace_valid_usage_for_the_same_request) ... ok
-
-----------------------------------------------------------------------
-Ran 4 tests in 0.123s
-
-OK
+$ python3.9 --version
+Python 3.9.21
 Exit code: 0
 
-$ python3.11 Scripts/test_mimo_usage.py -v
-test_concurrent_writers_publish_without_colliding (__main__.MiMoUsageCacheTests.test_concurrent_writers_publish_without_colliding) ... ok
-test_failed_publication_preserves_cache_and_other_writers_temporary_files (__main__.MiMoUsageCacheTests.test_failed_publication_preserves_cache_and_other_writers_temporary_files) ... ok
-test_invalid_rows_do_not_prevent_valid_usage_from_being_counted (__main__.MiMoUsageParsingTests.test_invalid_rows_do_not_prevent_valid_usage_from_being_counted) ... ok
-test_invalid_update_does_not_replace_valid_usage_for_the_same_request (__main__.MiMoUsageParsingTests.test_invalid_update_does_not_replace_valid_usage_for_the_same_request) ... ok
-
-----------------------------------------------------------------------
-Ran 4 tests in 0.178s
-
-OK
-Exit code: 0
-
-Validation limits
-make test: blocked because swift is not installed.
-make check: blocked because plutil is not installed on this Linux host.
-No Swift or app code is changed.
-
-Python compatibility review follow-up
-Both expected timestamps now use explicit UTC datetime constructors. The Z-suffixed input fixtures remain unchanged.
-
-$ python3 Scripts/test_mimo_usage.py -v
-test_concurrent_writers_publish_without_colliding (__main__.MiMoUsageCacheTests.test_concurrent_writers_publish_without_colliding) ... ok
-test_failed_publication_preserves_cache_and_other_writers_temporary_files (__main__.MiMoUsageCacheTests.test_failed_publication_preserves_cache_and_other_writers_temporary_files) ... ok
-test_invalid_rows_do_not_prevent_valid_usage_from_being_counted (__main__.MiMoUsageParsingTests.test_invalid_rows_do_not_prevent_valid_usage_from_being_counted) ... ok
-test_invalid_update_does_not_replace_valid_usage_for_the_same_request (__main__.MiMoUsageParsingTests.test_invalid_update_does_not_replace_valid_usage_for_the_same_request) ... ok
-
-----------------------------------------------------------------------
-Ran 4 tests in 0.020s
-
-OK
-Exit code: 0
-
-$ python3.11 Scripts/test_mimo_usage.py -v
-test_concurrent_writers_publish_without_colliding (__main__.MiMoUsageCacheTests.test_concurrent_writers_publish_without_colliding) ... ok
-test_failed_publication_preserves_cache_and_other_writers_temporary_files (__main__.MiMoUsageCacheTests.test_failed_publication_preserves_cache_and_other_writers_temporary_files) ... ok
-test_invalid_rows_do_not_prevent_valid_usage_from_being_counted (__main__.MiMoUsageParsingTests.test_invalid_rows_do_not_prevent_valid_usage_from_being_counted) ... ok
-test_invalid_update_does_not_replace_valid_usage_for_the_same_request (__main__.MiMoUsageParsingTests.test_invalid_update_does_not_replace_valid_usage_for_the_same_request) ... ok
-
-----------------------------------------------------------------------
-Ran 4 tests in 0.020s
-
-OK
-Exit code: 0
-
-The Python 3.9 verification below supersedes the earlier interpreter limitation.
-
-Python 3.9 compatibility verification
-Interpreter: Python 3.9.21 in a temporary installation; system Python unchanged.
-
-Before: both Scripts files from reviewed commit 195fb0396, run in a temporary directory.
-$ python3.9 test_mimo_usage.py -v
-Traceback (most recent call last):
-  File "<temporary-baseline>/test_mimo_usage.py", line 166, in test_invalid_rows_do_not_prevent_valid_usage_from_being_counted
-    self.assertEqual(last_activity, datetime.fromisoformat(timestamp))
-ValueError: Invalid isoformat string: '2026-01-01T12:00:00Z'
-
-======================================================================
-ERROR: test_invalid_update_does_not_replace_valid_usage_for_the_same_request (__main__.MiMoUsageParsingTests)
-----------------------------------------------------------------------
-Traceback (most recent call last):
-  File "<temporary-baseline>/test_mimo_usage.py", line 188, in test_invalid_update_does_not_replace_valid_usage_for_the_same_request
-    self.assertEqual(last_activity, datetime.fromisoformat(valid["timestamp"]))
-ValueError: Invalid isoformat string: '2026-01-01T12:00:00Z'
-
-----------------------------------------------------------------------
-Ran 4 tests in 0.024s
-
-FAILED (errors=12)
-Exit code: 1
-
-After:
 $ python3.9 Scripts/test_mimo_usage.py -v
 test_concurrent_writers_publish_without_colliding (__main__.MiMoUsageCacheTests) ... ok
 test_failed_publication_preserves_cache_and_other_writers_temporary_files (__main__.MiMoUsageCacheTests) ... ok
 test_invalid_rows_do_not_prevent_valid_usage_from_being_counted (__main__.MiMoUsageParsingTests) ... ok
 test_invalid_update_does_not_replace_valid_usage_for_the_same_request (__main__.MiMoUsageParsingTests) ... ok
+test_invalid_utf8_does_not_discard_valid_rows_in_the_same_file (__main__.MiMoUsageParsingTests) ... ok
 
 ----------------------------------------------------------------------
-Ran 4 tests in 0.013s
+Ran 5 tests in 0.020s
 
 OK
 Exit code: 0
 
 $ python3.9 .github/pr-proof/mimo-invalid-session-rows.py
+{"case": "invalid UTF-8", "exit_code": 0, "cache_written": true, "totals": {"input": 24, "output": 0, "cache_read": 0, "cache_create": 0, "messages": 2}}
 {"case": "non-object JSON", "exit_code": 0, "cache_written": true, "totals": {"input": 24, "output": 0, "cache_read": 0, "cache_create": 0, "messages": 2}}
 {"case": "numeric timestamp", "exit_code": 0, "cache_written": true, "totals": {"input": 24, "output": 0, "cache_read": 0, "cache_create": 0, "messages": 2}}
 {"case": "invalid token count", "exit_code": 0, "cache_written": true, "totals": {"input": 24, "output": 0, "cache_read": 0, "cache_create": 0, "messages": 2}}
-PASS: 3/3 CLI fixtures refreshed the cache
+PASS: 4/4 CLI fixtures refreshed the cache
 Exit code: 0
+
+$ python3.11 Scripts/test_mimo_usage.py -v
+test_concurrent_writers_publish_without_colliding (__main__.MiMoUsageCacheTests.test_concurrent_writers_publish_without_colliding) ... ok
+test_failed_publication_preserves_cache_and_other_writers_temporary_files (__main__.MiMoUsageCacheTests.test_failed_publication_preserves_cache_and_other_writers_temporary_files) ... ok
+test_invalid_rows_do_not_prevent_valid_usage_from_being_counted (__main__.MiMoUsageParsingTests.test_invalid_rows_do_not_prevent_valid_usage_from_being_counted) ... ok
+test_invalid_update_does_not_replace_valid_usage_for_the_same_request (__main__.MiMoUsageParsingTests.test_invalid_update_does_not_replace_valid_usage_for_the_same_request) ... ok
+test_invalid_utf8_does_not_discard_valid_rows_in_the_same_file (__main__.MiMoUsageParsingTests.test_invalid_utf8_does_not_discard_valid_rows_in_the_same_file) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.012s
+
+OK
+Exit code: 0
+
+$ python3 Scripts/test_mimo_usage.py -v
+test_concurrent_writers_publish_without_colliding (__main__.MiMoUsageCacheTests.test_concurrent_writers_publish_without_colliding) ... ok
+test_failed_publication_preserves_cache_and_other_writers_temporary_files (__main__.MiMoUsageCacheTests.test_failed_publication_preserves_cache_and_other_writers_temporary_files) ... ok
+test_invalid_rows_do_not_prevent_valid_usage_from_being_counted (__main__.MiMoUsageParsingTests.test_invalid_rows_do_not_prevent_valid_usage_from_being_counted) ... ok
+test_invalid_update_does_not_replace_valid_usage_for_the_same_request (__main__.MiMoUsageParsingTests.test_invalid_update_does_not_replace_valid_usage_for_the_same_request) ... ok
+test_invalid_utf8_does_not_discard_valid_rows_in_the_same_file (__main__.MiMoUsageParsingTests.test_invalid_utf8_does_not_discard_valid_rows_in_the_same_file) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.009s
+
+OK
+Exit code: 0
+
+The tests include both a bad byte between valid rows and a truncated UTF-8 sequence at EOF. Expected datetimes are explicit UTC values, so the Z-suffixed input fixtures remain compatible with Python 3.9. The Python 3.9 interpreter is temporary; system Python is unchanged.
+
+Validation limits
+make test: blocked because swift is not installed.
+make check: blocked because plutil is not installed on this Linux host.
+No Swift or app code is changed.

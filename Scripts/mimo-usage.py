@@ -30,7 +30,7 @@ CACHE_PATH = Path(
 def parse_session_usage(jsonl_path: Path):
     """Yield (identity, timestamp_iso, usage_dict) for each assistant message with usage."""
     try:
-        with jsonl_path.open() as f:
+        with jsonl_path.open("rb") as f:
             for line in f:
                 try:
                     d = json.loads(line)
