@@ -73,4 +73,48 @@ Ran 4 tests in 0.020s
 OK
 Exit code: 0
 
-Python 3.9 is not installed on this host. Download approval was requested; no Python 3.9 run is claimed here.
+The Python 3.9 verification below supersedes the earlier interpreter limitation.
+
+Python 3.9 compatibility verification
+Interpreter: Python 3.9.21 in a temporary installation; system Python unchanged.
+
+Before: both Scripts files from reviewed commit 195fb0396, run in a temporary directory.
+$ python3.9 test_mimo_usage.py -v
+Traceback (most recent call last):
+  File "<temporary-baseline>/test_mimo_usage.py", line 166, in test_invalid_rows_do_not_prevent_valid_usage_from_being_counted
+    self.assertEqual(last_activity, datetime.fromisoformat(timestamp))
+ValueError: Invalid isoformat string: '2026-01-01T12:00:00Z'
+
+======================================================================
+ERROR: test_invalid_update_does_not_replace_valid_usage_for_the_same_request (__main__.MiMoUsageParsingTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<temporary-baseline>/test_mimo_usage.py", line 188, in test_invalid_update_does_not_replace_valid_usage_for_the_same_request
+    self.assertEqual(last_activity, datetime.fromisoformat(valid["timestamp"]))
+ValueError: Invalid isoformat string: '2026-01-01T12:00:00Z'
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.024s
+
+FAILED (errors=12)
+Exit code: 1
+
+After:
+$ python3.9 Scripts/test_mimo_usage.py -v
+test_concurrent_writers_publish_without_colliding (__main__.MiMoUsageCacheTests) ... ok
+test_failed_publication_preserves_cache_and_other_writers_temporary_files (__main__.MiMoUsageCacheTests) ... ok
+test_invalid_rows_do_not_prevent_valid_usage_from_being_counted (__main__.MiMoUsageParsingTests) ... ok
+test_invalid_update_does_not_replace_valid_usage_for_the_same_request (__main__.MiMoUsageParsingTests) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.013s
+
+OK
+Exit code: 0
+
+$ python3.9 .github/pr-proof/mimo-invalid-session-rows.py
+{"case": "non-object JSON", "exit_code": 0, "cache_written": true, "totals": {"input": 24, "output": 0, "cache_read": 0, "cache_create": 0, "messages": 2}}
+{"case": "numeric timestamp", "exit_code": 0, "cache_written": true, "totals": {"input": 24, "output": 0, "cache_read": 0, "cache_create": 0, "messages": 2}}
+{"case": "invalid token count", "exit_code": 0, "cache_written": true, "totals": {"input": 24, "output": 0, "cache_read": 0, "cache_create": 0, "messages": 2}}
+PASS: 3/3 CLI fixtures refreshed the cache
+Exit code: 0
