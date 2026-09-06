@@ -3,6 +3,7 @@
 ## 0.56.8 — Unreleased
 
 ### Fixed
+- Poe: calculate weekly points, requests, and spend from the last seven elapsed days, so older activity no longer inflates sparse or inactive weeks; share totals aggregation with Today and the 30-day window (#3449). Thanks @Lucenx9!
 - MiMo: skip malformed local session rows before deduplication so valid usage still refreshes the cache, preserving all token buckets and UTC daily/weekly totals with shared aggregation (#3448). Thanks @Lucenx9!
 
 ## 0.56.7 — 2026-09-06
