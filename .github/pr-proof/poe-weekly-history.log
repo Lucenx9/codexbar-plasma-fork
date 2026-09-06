@@ -15,7 +15,7 @@ AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
 + '1,030 points'
 - '30 points'
 
-    at file:///home/simone/code/CodexBar/.github/pr-proof/poe-weekly-history.mjs:42:8 {
+    at file://<repo>/.github/pr-proof/poe-weekly-history.mjs:42:8 {
   generatedMessage: true,
   code: 'ERR_ASSERTION',
   actual: '1,030 points',
@@ -38,3 +38,13 @@ make test: blocked because swift is not installed.
 make check: blocked because plutil is not installed on this Linux host.
 Scripts/lint.sh lint-linux: portable checks, JavaScript formatting/lint, and TypeScript checks passed; SwiftLint could not load libsourcekitdInProc.so.
 Changed Swift test file passed SwiftFormat. Full Swift tests must run in CI.
+
+$ .build/lint-tools/bin/swiftformat Sources Tests --lint
+Running SwiftFormat...
+(lint mode - no files will be changed.)
+Reading config file at <repo>/.swiftformat
+error: wrap rule timed out in <repo>/Tests/CodexBarTests/ProviderArchitectureGatekeeperTests.swift.
+error: extensionAccessControl rule timed out in <repo>/Sources/CodexBarCore/Providers/Providers.swift.
+error: enumNamespaces rule timed out in <repo>/Sources/CodexBarCore/Providers/Antigravity/AntigravityQuotaSummaryParser.swift.
+
+Stopped the full-tree formatter after these timeouts in unchanged files. The changed Swift test passed a separate focused SwiftFormat check.
