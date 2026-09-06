@@ -137,5 +137,56 @@ class MiMoUsageCacheTests(unittest.TestCase):
                 self.assertEqual(set(Path(root).iterdir()), {cache_path, other_writer})
 
 
+class MiMoUsageParsingTests(unittest.TestCase):
+    def test_invalid_rows_do_not_prevent_valid_usage_from_being_counted(self):
+        module = load_mimo_usage()
+        timestamp = "2026-01-01T12:00:00Z"
+        valid = {"timestamp": timestamp, "message": {"usage": {"input_tokens": 12, "output_tokens": 3}}}
+        invalid_rows = [
+            None, [], 42, "not an event",
+            {**valid, "timestamp": 42},
+            {**valid, "timestamp": [timestamp]},
+            {**valid, "timestamp": "not a date"},
+            {**valid, "message": {"usage": {"input_tokens": "unknown"}}},
+            {**valid, "message": {"usage": {"output_tokens": [1]}}},
+            {**valid, "message": {"usage": {"cache_read_input_tokens": {"value": 1}}}},
+            {**valid, "message": {"usage": {"cache_creation_input_tokens": float("inf")}}},
+        ]
+        for invalid in invalid_rows:
+            with self.subTest(row=invalid), tempfile.TemporaryDirectory(prefix="codexbar-mimo-rows-") as root:
+                projects = Path(root)
+                (projects / "session.jsonl").write_text(
+                    "\n".join(json.dumps(row) for row in [valid, invalid, valid]))
+                with patch.object(module, "PROJECTS_DIR", projects):
+                    windows, sessions, last_activity = module.aggregate_usage()
+                self.assertEqual(windows["all_time"], {
+                    "input": 24, "output": 6, "cache_read": 0, "cache_create": 0, "messages": 2,
+                })
+                self.assertEqual(sessions, 1)
+                self.assertEqual(last_activity, datetime.fromisoformat(timestamp))
+
+    def test_invalid_update_does_not_replace_valid_usage_for_the_same_request(self):
+        module = load_mimo_usage()
+        valid = {
+            "timestamp": "2026-01-01T12:00:00Z", "requestId": "request-1",
+            "message": {"id": "message-1", "usage": {
+                "input_tokens": "12", "output_tokens": 3, "cache_read_input_tokens": None,
+            }},
+        }
+        invalid = {
+            **valid, "timestamp": "2026-01-01T12:01:00Z",
+            "message": {**valid["message"], "usage": {"input_tokens": "unknown"}},
+        }
+        with tempfile.TemporaryDirectory(prefix="codexbar-mimo-update-") as root:
+            projects = Path(root)
+            (projects / "session.jsonl").write_text("\n".join(json.dumps(row) for row in [valid, invalid]))
+            with patch.object(module, "PROJECTS_DIR", projects):
+                windows, _, last_activity = module.aggregate_usage()
+        self.assertEqual(windows["all_time"], {
+            "input": 12, "output": 3, "cache_read": 0, "cache_create": 0, "messages": 1,
+        })
+        self.assertEqual(last_activity, datetime.fromisoformat(valid["timestamp"]))
+
+
 if __name__ == "__main__":
     unittest.main()

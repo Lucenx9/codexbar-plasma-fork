@@ -34,6 +34,8 @@ def parse_session_usage(jsonl_path: Path):
             for line in f:
                 try:
                     d = json.loads(line)
+                    if not isinstance(d, dict):
+                        continue
                     ts = d.get("timestamp")
                     msg = d.get("message")
                     if not isinstance(msg, dict):
@@ -41,8 +43,14 @@ def parse_session_usage(jsonl_path: Path):
                     usage = msg.get("usage")
                     if not isinstance(usage, dict):
                         continue
-                    if not ts:
+                    if not isinstance(ts, str) or not ts:
                         continue
+                    usage = {
+                        key: int(usage.get(key, 0) or 0)
+                        for key in (
+                            "input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"
+                        )
+                    }
                     metadata = d.get("metadata")
                     message_metadata = msg.get("metadata")
                     session_id = d.get("sessionId") or d.get("session_id")
@@ -64,7 +72,7 @@ def parse_session_usage(jsonl_path: Path):
                     ):
                         identity = ("legacy", session_id, message_id)
                     yield identity, ts, usage
-                except (json.JSONDecodeError, ValueError):
+                except (json.JSONDecodeError, ValueError, TypeError, OverflowError):
                     continue
     except (OSError, IOError):
         return

@@ -1,0 +1,47 @@
+MiMo invalid session rows proof
+Baseline: c15f736ef42158b830b47db1970ea91886e30e85
+
+The proof executes the production Python CLI with synthetic JSONL files, an isolated session root, and an isolated output cache. No real account data is read.
+
+$ python3 .github/pr-proof/mimo-invalid-session-rows.py baseline
+{"case": "non-object JSON", "exit_code": 1, "cache_written": false, "error": "AttributeError: 'list' object has no attribute 'get'"}
+{"case": "numeric timestamp", "exit_code": 1, "cache_written": false, "error": "AttributeError: 'int' object has no attribute 'replace'"}
+{"case": "invalid token count", "exit_code": 1, "cache_written": false, "error": "ValueError: invalid literal for int() with base 10: 'unknown'"}
+FAIL: 0/3 CLI fixtures refreshed the cache
+Exit code: 1
+
+$ python3 .github/pr-proof/mimo-invalid-session-rows.py
+{"case": "non-object JSON", "exit_code": 0, "cache_written": true, "totals": {"input": 24, "output": 0, "cache_read": 0, "cache_create": 0, "messages": 2}}
+{"case": "numeric timestamp", "exit_code": 0, "cache_written": true, "totals": {"input": 24, "output": 0, "cache_read": 0, "cache_create": 0, "messages": 2}}
+{"case": "invalid token count", "exit_code": 0, "cache_written": true, "totals": {"input": 24, "output": 0, "cache_read": 0, "cache_create": 0, "messages": 2}}
+PASS: 3/3 CLI fixtures refreshed the cache
+Exit code: 0
+
+$ python3 Scripts/test_mimo_usage.py -v
+test_concurrent_writers_publish_without_colliding (__main__.MiMoUsageCacheTests.test_concurrent_writers_publish_without_colliding) ... ok
+test_failed_publication_preserves_cache_and_other_writers_temporary_files (__main__.MiMoUsageCacheTests.test_failed_publication_preserves_cache_and_other_writers_temporary_files) ... ok
+test_invalid_rows_do_not_prevent_valid_usage_from_being_counted (__main__.MiMoUsageParsingTests.test_invalid_rows_do_not_prevent_valid_usage_from_being_counted) ... ok
+test_invalid_update_does_not_replace_valid_usage_for_the_same_request (__main__.MiMoUsageParsingTests.test_invalid_update_does_not_replace_valid_usage_for_the_same_request) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.123s
+
+OK
+Exit code: 0
+
+$ python3.11 Scripts/test_mimo_usage.py -v
+test_concurrent_writers_publish_without_colliding (__main__.MiMoUsageCacheTests.test_concurrent_writers_publish_without_colliding) ... ok
+test_failed_publication_preserves_cache_and_other_writers_temporary_files (__main__.MiMoUsageCacheTests.test_failed_publication_preserves_cache_and_other_writers_temporary_files) ... ok
+test_invalid_rows_do_not_prevent_valid_usage_from_being_counted (__main__.MiMoUsageParsingTests.test_invalid_rows_do_not_prevent_valid_usage_from_being_counted) ... ok
+test_invalid_update_does_not_replace_valid_usage_for_the_same_request (__main__.MiMoUsageParsingTests.test_invalid_update_does_not_replace_valid_usage_for_the_same_request) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.178s
+
+OK
+Exit code: 0
+
+Validation limits
+make test: blocked because swift is not installed.
+make check: blocked because plutil is not installed on this Linux host.
+No Swift or app code is changed.
