@@ -47,4 +47,4 @@ error: wrap rule timed out in <repo>/Tests/CodexBarTests/ProviderArchitectureGat
 error: extensionAccessControl rule timed out in <repo>/Sources/CodexBarCore/Providers/Providers.swift.
 error: enumNamespaces rule timed out in <repo>/Sources/CodexBarCore/Providers/Antigravity/AntigravityQuotaSummaryParser.swift.
 
-Stopped the full-tree formatter after these timeouts in unchanged files. The changed Swift test passed a separate focused SwiftFormat check.
+Exit code: 70. The full-tree formatter failed with timeouts in unchanged files. The changed Swift test passed a separate focused SwiftFormat check.
